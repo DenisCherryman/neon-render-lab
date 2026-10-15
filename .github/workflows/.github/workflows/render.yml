@@ -1,0 +1,152 @@
+# Everything needed is embedded here. Create exactly one file:
+# .github/workflows/render.yml
+name: Free 3D cyberpunk Blender test (real CC0 gunshots)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/render.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 58
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install real Blender renderer and FFmpeg (CPU; free standard runner)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends blender ffmpeg xvfb libgl1-mesa-dri libgl1
+          blender -b --python-expr "import bpy; print('BLENDER', bpy.app.version_string)"
+
+      - name: Extract embedded rigged-scene code and audio mixer
+        run: |
+          python3 - <<'PY'
+          import base64, gzip
+          from pathlib import Path
+          code = {
+          'render.py': (
+              'H4sIAELx0GoC/51ae2/bupL/35+C24OFpERmLD/iJD1aoGncnuK0aZGkp+duUBi0TdtqZElXlJI4uNjPvr8h9XScbu8WqW2Rw5nh'
+              'cN7Uq1ev3qVSslRu4kyy81BGC5myJI3jJcPfPI7mMsnO2EpGeRBJpu6CKJILtgpv3rH5WqRinslUsUM2FxuZCqbW4k7yzlUesYcg'
+              'W5+xWYGzO2PdLyBEDzzZdm7WkgWbJE4zoLuOw0WA8VU4Y4FiImIB4BICjrJwy+apFASXBqsVvpTYJKFkyzTesAx4btbYBP+hmHzU'
+              'M4p3Xr161THo2QzUip8bka3L36mIFvGmfIpVR6MjiDwLQlUwx/6S8yxOzWSehmEw46n8Zy5VVkJgNJVZGsh72ekYrFxJubDHfacD'
+              '4jxOFI9nP4AI4yG+piIMbUguiCPfup58nLy9sZ6BLgCaSTtXcroK45kI/XciVNLpLOOUbSAg2hhfiExwMC3TALNnHYZ/z8c5HfC9'
+              'tDdOR80lztHXQDjeTD6CKxozM7w4oVSqOMyJw+kjoMf93ovzW8wPe8cvzicyxUwmVkTW6+0gWiYKw/1hMbpMoUdTlQkIFtCtUSzQ'
+              'rLQRBBtgniqZZUG0UnwZhHIKEWHvALa+XL63dggCIMEpYzZWnH5xMVP0bVv8SFNS5mtqOc+WbqYZjhjgGCIC+kw6Wbo1ojfg94F8'
+              'qDnST3oVsUVMvVn9bXXkI5kWs/8SYS4naRqnLrvZJuan8++gu86gdCJdWLt8FGzLaBXoM7fOP04uLyZX08nkr8lkejn5+8ZiwVLr'
+              'gkgSfg9Txomx//KZPXRZ32U9h0lscGdlxfxEf2HJL1H99vnqz/PJ5ds/rA6IroUSWZbaepHLLAn7kZYD41+057ieAUQmxNQgnxoP'
+              'oKyWnDQcfw5FinS8j6QB20vTTAGmrV5tgvs1cB6HcTrdxAu9+av3529KDXyI03Bh5jFl93jP67v0OabPwcjpdBZyyUqztSMoocs0'
+              'vMs2MoMPAJzL0jhfrfFzOHDhieMHGi0Y2/h7rD+SDxqXY0D4Ilguya9ozL59YCh45TRNRWBf+TdpLo1LUf6G0xg0DzLWs3wlM9v6'
+              'kgbRPICYF+z8+uKdZZCQUhXeyCznQZTkmbq1zgXU6S0RtL7Dxy1FHmbTe7KBXUZ2Fn6i/YfB/NkyLZh9K65ITJFU6tkSLcBqCZgl'
+              'Kdbs0j8JSZaozE4nm0Bp8zDcOwyn+AKI5bRwKQgtWmXrFzFeFwA768CY3Jzh//8tqAK8pHRW/dpZShvVixCy8jRim05HqGQtwsyv'
+              '1M76JjNWjBbKZrSPpO/a0NdjFx+n+OgfOy7j8BXcGzsdJATYj2pgegNNCZ6gG5tgEQWrdWYQaSz9sUtKj4+RR1hOCE3/BGi2Imrg'
+              'eLudIYJgjIWEAWuh7j2wMIYAXA4T4p577HSSILprLPsjzhgNsUjiQFzbI55dPhjQmh7+H7swuAeRbpo7xyNT4DnfVNSwaNgnVh36'
+              'cHnfHWIdEpT4YdpceyHSOyRIWzVPBWIeMyDK7PWE1pLYjgnNgNCMC3Of5zNZmHoYzwW5UxcORoQYAHaXzeDXYPlOHd0pTUCYWvMk'
+              'DTZBFtzDloFlKhYLW0Hevlfj8ssfRllivxn5Ta5hJjjx4NNH8bwINjIi/VS+ZqdFvshSqkA0RQAJt3ZFVQdGN42z5qNGo72KU9Jo'
+              'eyoggU+1MVD7Edp9bZvwq37M8RkskTEa32Zdx0tK7uZrijhysZIWPPc5QtXHhkVhDX8IFmSGhPK1HlByhU1myu9XcM+wf5OkCVDi'
+              'iNKKECdqfZt8eP/HzeRievn56tObkkphU3Gn8xt7D7tBVKHIkqczKK9IwV4GmeWp7Ogzt65vriaTG/av0tjAtd1ze26X904c1+4P'
+              '3cEQigqNKQBM8qcChBbkf3bXgwUY0dB4QIM4j5W0vaFTi+zRpxUH9uiwyE7Nl+0cDGvpbP2ud3wYHPT5cTX25A94/9kiz6sAzDau'
+              'Jm8+ssEFO//64ePFByRcrv3obt2nAz7CTvq0k2dI+u4exDCtJ8ctvEjNGu3tR723gdP21E9Pvnf4A6tPUIbs4uTDXRf59PT7U5eP'
+              '2jjqzRiffC9R/iyDuTReAHGdNtXVcvT4YEzbA6u2cWCnI+3JwDp5KdCwfxwGzn8OTO5ETsgc3F29iZNiE4bo2zRW6kGEdywU0OAN'
+              'PIkh2R0c3h3wk5GrvRcpBR+5fThcSh0ct3Y+FEHgtRMRIC21DuH97TuChg5xcrQDuEo4vZOB45B2ftS+WMU5UnOlKzUorwgDlQVz'
+              'toSnx+6Nd0KiK9qJSBI/UGZEnikV8JTKHxWbgTHX6YcWXJ17uNYb6ElhKABAfijT1dbX2KpBk5Hoz2oMJWUifeviw/Wf1mszQi7O'
+              '0DZuZFaTNX6pQRejzutWuQP0VIXBLVXQIc7IjmeFV5rxyo2JrBwqXdlU5qFE1mQKQ1sbrMeHjtNtrHN4FlOSPr+b/jMXCPXd/4bX'
+              '+IelxzUCu+0yZh0taAQ7aNCd3JqogRg3oiDnHfd6LlLybh+BjmKdAf6EvBOFFcriTRHgcNoDQHgnI8B3h24bXke3GZhqhLbRgMIh'
+              'lgyJRM8duWOHApxZcRFsGKoeHbD70PIBWDoFRgPbHQHSPdUadfn5ZnLGvkZhcAeVT+V9EOeKVfGpO0Pet2i0DBDWYmgd3EajjQCi'
+              'VVMAOIWqKn7Td+hS0INPRcZNUgYAsu5Cf4XWYEBS3Yyj7aAupwR8nWWJOjs6SsUDXwEwnyG/TbUuRKQLm6NNuojj2VFWdBGOFvL+'
+              'qOwkHFEeH6qjVZgtjxptCqszR7iR00WQ+mUZ+SMOIjvWud38YWE7rmX4g9JjdCPuJKCVXS105SMMbhrfFRFRk2pjq2GtJnGHqpko'
+              'zqoKVmNStsZQGCNEH0HxLuKHKIxhK9GKaSj6UUi1kvyZ5UJaRiMb7Qwbv12DkwiWxLA/ssCC2u+jHv4ZmqkI4PCu8ihD6qALWWh0'
+              'SYRpeLYIFpr1RcEY3EqawpbCLbbVqZXBv/2unWaweKzdZr/anPQhWnvX7J1WjmJUaWqKLzpBuyz+/WJXOiYUCrcfYRekzN6ClR/B'
+              'fdh2rCNSTFxVHSwSD89Qvvs+HN2nNzdfryaW417GkawyGWCg7haN1dFnn8jef7x5xx6g/SQnc1b/wa5IuwX1NZBAMB2lohUvHOpv'
+              '7EsoEK2oG5bGpBhL/bvibw3VoQxk+5pkBwO4L5p5pA5lq20eUOtMcwUc+32qSceTHIm1IAdYBBuc0qHX3O+vOFyiYqCzOPFvX5Rr'
+              '0W0haTTmvleJj14CFI0sEZEoprwyDR6nZdmdbG2nkeUZrD4x0cz9GmsouS/Eu6vFOMf/QcYxqnqmqGu0B1NM5ciEA/A+2+oz0E6A'
+              'iTxbx2kt3TrE2N0+92ijkKHv90zSgCEqqka740g+MN4rEjeNqB2Y+BO1FrrcO91dSq1NngSHyAmctuhKiZ41S+JKnT9Nrv+w2unS'
+              'b+wTJRr4jyI4WAURVJNOGpoJx642Mbl27auzmLCncaFuTNcLAbFbaFozyUuImaImSOJwuwLU8zwt0Q2KgojPqh4FbKDU7IopEw3I'
+              'cKqYoTu51L9+DYWqAxTSGm1QBSpqT1cHaU5wjsgMyuzy4xs2D4NEUQNAMFoVSvZG63dhSmRUeCh1o+ir8YYj4BVDU9puvUudNCj/'
+              'OQiPQmFSCtXKjPUQM6LF3O5BQSZLSV40lK+J/WUe6mVrCidgUyC+I3AiMaAoGufICsNAzyyRULbPSFPgmzyjzpZtEU6rtEozRxkX'
+              'NPuB8hunqU2GOV0OUfM7M1g0/zXvO4m9GbztfdfApoQ0SXMVJMqCUbsSF0Iz6e03KRLIH0ZqjBxnCEVMKevpromHSi9mMXUCwaC4'
+              'F0EoZqHkHXP6NEMY5utYyYiMmVZ2aYfgWGUSoQteFvJD2tBdIpTp0GoOjQiWlTHXefSDZok60zb4cLXvnNItx2NZ14PelLAj8s20'
+              'ILV4Zjr4QRu0DhCQMo5vlUuoJYAjDRfpG4EKh65CLL1ji2ai8lRIaasHJOELReduWzy1HNMItWif7UVtisU3YXqZ+ItYaLxEgbPV'
+              '3bcCoXZTFEKaCcy1vjKhEEbMERFkK/Qb6VV5Zhipqd+eDXrfy7B4ra87jPC1R6LO2DbUPSk1D7rLQJfTpf7DGB6pWyWhYlEwh4Ik'
+              'gZyXUXGVR9MiauyPjYXerdIggSihOWV4bB73vxkka6JVIkG7r02lBqhCWrB6eXaq3bp1/vlygnLq+TQJ0icK+1DUQatnqg2U9/vg'
+              'doslHXuoYoNN2Kc9qkV7ZiGd+f9jL01GEOxQJaE+KUuquYRDRxmpa+svyHnjsBo1PRbqGvaoPvZQ/gz0c9V4oNp63EZVMlMz8Lqa'
+              'aonEq/ZFOtDmgGRKo9TA1PunEu+EWgenqNHrJo+p7Sske2jr4bYEgKNLnSKjVgIZddimbsZatFFb6qKuN27uvTduItlDvZho7Xsw'
+              'bHANhQ+gYkVrA756RY6R2rCILXHW4oHoeydFO4PaJ8TBsIlnDwfFRIuDfk9vpFlU1ys6xgHAWe644TskrdqD3bn2VMcP8lgyyuky'
+              'O5N2HWngvairl0c6PsJZzcqwi1ihXZNpzT2yTf70hIQA9VOUqdd6fqYdsSlQUfHq8hvYEF3I+6LEW1C6gMR8jmIg3DKRldk7iDN9'
+              'GenqQCuQYKBeEjpjUWRjczbLwxnvqHWcTQ1NCs633tiFbIcjd3T83WW3A88ded+dsqJyG8Jp77iQVKOtuGy0Fd1xs7EoQ5FQVe+j'
+              'HIns22X3jlVtrgY/tyCo/fySbhbvwE5xJ+Gfnp7W7gO7jwMq2eFYeuzA5KvyMbG7BZ2jPu85+lKkoPs7OzExo/czF6Gv2nTS3DUk'
+              '6HefeoX66YAP97qwO7k1t8AI9jJFICrxWa4e95fFfZk+7qk+0+Jefbf/ZX0yKlH2Ets1k/Xl84fLG+s5tvqm0DOdF+j3blIPE6Kb'
+              'kH51e9dcr9aCLilUvEQRTD0zmLuG0tNThJkX4hjl1KUeL0OBPD4IwxyHbATaYr9J8dejWsWB02boubXvzLeMfkRG7zm/oKotuZjW'
+              'IwQ7OOkZvdynsEa+J7oEW3a9l2F6zn4yzzTI0G3oT9WJ1UKWpgEGB4FAIHUpRTbfp+c0yCScSb87MO6AyfLucJanClLVSaZGY9qe'
+              '1VWS6doS5+rnN0j5/dTQNddI5cWIN4RfjFbTeZzjXE7coueL+vSlG6ZCrdp3TK9pvL5iMo/7b380xxUubi6NqPGt/37ltFG5wyGJ'
+              'mbKXXWUcvCrPr3GxoOa+7XF9wIuGRR0XA54ZQEDyGsVMgyU1d/Vfe3L32GmTU910svS6Hf9RdYB/aOds/K/LkNfKsOq5F44dW7gt'
+              'PTRyZ5dZoVzStRFdY8LLN52+g0SnBPUI1BQDQElRtooI388afsM3ClT6K2P61qHhpYzahiXDUdPplKZriDYnWjY7PC1SBSj/hURk'
+              'VGdU3wQLFNhUS6u6hCLtpltnfSsh0rmpH1USRNQ9zqO5ZGIlqBhDpkTXbbxj3pJo3IskFOFmKbIbfXE8opyHOBiPHJcuVni/X0RF'
+              'bSPtYFgIFKIimXparEZej77d9fjA9Gf0ufRczx24o+9Vn2bk/PS+FkWIfkmFjA15JLaI0gppaWlfPRjeQiZQG7j4UW1s9qO+cBg4'
+              'P7O2yni0wVnnlRSNjEsPXhvZC/ewJM29BkeycscDt9+0uswne8OMc9Qftmyiwf0hTmH47O6PYtvBInMZstiTbo+f6IeNeESAo+R+'
+              'MDpEho/B7pCf9kb4gb8dq9wtOgAzdvHhefR5+stW+kKg/4WVbQ7ajv6teUGSikIZr1KRrLdanYu0R784yTJqN1F6S/1w6lm0kkm+'
+              '+46geelSq1CrHDjhY3dAd1IdQOxTDwwXqvFXkGY50tJ5EMmNKF7jLF9YMk8+vvQKk9dI5NGDkU44kVA/t5DOy74Z9Y2SpCSeczQ2'
+              'N+6JiHyP9w50tgfdtDXMQdGsPOCnpRnRyvLODYtok8NDWqkXYLu9wx73xi8h6juFtmT0LmTqN6/vek6t43WcaCk29LrZzur97i+y'
+              '3/2TdsNKbBLERe+gzlwXGZLWsbPT1iIGDisOKoahpMe8f6icAyBym8OnOEsaPIAdmIl5rGhixI/1RLEBOqRKEUhih4ZYsbs5/Eq9'
+              'b35M95aDxtJdA9Iruk2kv3yvSYt+NYPeC/szU7qWGYvzLMkz01+mV0sVvZRLEUHF1JMTAb2RZl7QQ+kJB8tCKe5l8XLxvUARxz59'
+              'GfL2e6cys732bZ1l3gi1di/riu7UlRSL7VnZ6bXcnVcpp2TL0cq1dm/c1JnlYk2zwHQto3ZWkaxVxv6w4QqsT4WabhDt6A6rvsh6'
+              '9g7r23+cT66+fL38c/r24+evF9PJ318mVx8+TS5vuH4X23JqzNXLuvRlV/3mYov/Czys424eLgAA'
+          ),
+          'make_audio.py': (
+              'H4sIAELx0GoC/51WXW/bNhR916+4yB4kNbJsOXa2qfND0ybDgHYr6j4MCAKDliiLC0VqJJXYyfLfd0nKsZx2Q7eiiMyve8+5H4c8'
+              'OTm56Bgv4SzNQNNCilKDrIAUhkkBWnaihErJBjZUdExQePt2AhWjeEThdlUysdEQCWlA74SpqWEFLK9+j9MgWMpOFVTn8LmmcKUo'
+              '/mGKEtXA0tl9z9aKqB1Ev7VU/Ewa+kaZOAFaMkNLKDhrNTRMKaloGax3sKMbqfS4JqocccSix2235qwYk65kEiKNHpjR4IbjT5dv'
+              '3n24TJsSoVxJTnc5XLCN83xBxK0nIqXRhrY6hU/0zw7RaaiqpqWb1yAkmJqhq5Yos4OPO1NjRFpS3JIN1WlwcnISuMi0xNScrYE1'
+              'rVQGPuLQL3SK43yq0DLVZr+Os4oaxegdDfop3a1bJTFUOggu3iwvYQFhbUyr8/FYkft0w0zdrTtNFSbIUGHSQjbjL8PRECaOYjIO'
+              'g6tf3l8u0WAUttPp+UhR63E0Se/JXZjA0WS2n2za+YuNAez/+ROGMI5rTXu23388Y4M6csi8gTjQNYYacVxH2ffJ17B8YTgeeI2m'
+              '8+RrWP/90FmWfIXLS7hHR2bz/wFu/t/9zM+/kc9NEBCtqYudLa0o1NV2VRQTjKlfSJvbkqmIbpk2K3m7+Kw6GgeVVCCwp4AJcDWQ'
+              'O++GqA01aKs3Onab3BKrwLax35E6czqKAe30U9oQE8X4WWn2QOEnyOaTSf5MqlVMmCh8J+8Fl8QKA9xRxVAsStdsz3qRY4VYrwlU'
+              'vNN1D3hvZtAfkWuG036zRxHvsX4bKEWYpvCpE4Y19NJqSVSFFo2XtoZpbYEiSQSnuhaVJ4dHb/sJQxx859SrYVsgnG2EBrpFceQ7'
+              'uMemRIWgNpKyYMRqVtM9PHA6qjjRNcomws4hct9RFo+nsxTN/UpMpwgHn3ggiEJ2ppQuzowDURRuaYsrGsy9RFVGAULrwMmOKg0t'
+              'VWCbKQ0wQsL31I1Lt3OU9IYTbw2z7zrPR6SkaGTV2DPK8o88OBhBFmMpTGfwCrLJZOKD7O1jJaDklNF1tDe8t5JAOj9HwY6sp8M0'
+              'Jgy7FdLpNL6JkfCylhQ0ZvQW1dWyG14lh0skQawlxZugRK/+zrHR3XSiQl3esz2g+UJjkp5TlmGkXzkaHsWg7/ru+8ezs7OjszPL'
+              'IMBicFEO/dVg9W1Us5Ku1kQIqtyYyw1HhNwOqC0zN7sbKGc4quwcJ3cVc4vG/sV7d+JGbLiViI5zrYpFUVsXfIWRxSJZIGxFZa5J'
+              '03K6slWxmP2AYMO+ABinvldW+N/m3gfNJ9/ROLU8rDObkehZBPYnUW7sdTcoKpuULeZ4Ncz7neQdbnYeBP6ySCLvK8FS8v6coZS0'
+              'NqXRM7cqvH50Np9yckPQQ0OQ14GQ9ozyY+a6p56EA0MexeLRf58S4gAuHvc4n/46/LzWvdcbbyEOmLAsw+sJ4gixZsMw/UMygfJg'
+              '9+I+cPQtR0XEhkZZAhiknmaMJ7I4Do5IViE60U8E1WLBRGthPw6OnGZPeYm9b59WCyxqbXJh+XMUrsVkQK3nhwsNPoXUwn0Xk/TH'
+              '2TXG4sYq/yGXmDrcs8IXAYZwa2vpdc/EYYttcTWktQv+9PAyf1GExJWtLyk3Luxn6n4XOXEPhqJZ6eycUzvwz0TXQVg4Xv8/sK1V'
+              'VHzocaj6955XDqyNodLh0Irf4Q2WpmEyvBEOz6JUdSKynBMoalrs77je41t0YtX3gMbLh4NgRca/Dw9SEx7fPH8DA1VoZQULAAA='
+          ),
+          }
+          for filename, payload in code.items():
+              data = gzip.decompress(base64.b64decode(payload))
+              compile(data, filename, 'exec')
+              Path(filename).write_bytes(data)
+              print('Extracted', filename, len(data), 'bytes')
+          PY
+
+      - name: Render 72 frames in Blender with two real armature-rigged GLB actors
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 -P render.py
+          test "$(find frames -name 'frame_*.png' | wc -l)" -eq 72
+
+      - name: Mix authentic CC0 firearm recordings with precise shot timing
+        run: python3 make_audio.py
+
+      - name: Assemble the final 3-second MP4
+        run: |
+          ffmpeg -hide_banner -loglevel error -y -framerate 24 -i frames/frame_%04d.png \
+            -i action.wav -c:v libx264 -preset medium -crf 19 -pix_fmt yuv420p \
+            -c:a aac -b:a 192k -t 3.0 Cyberpunk_Cloud_3D_Test.mp4
+          ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 Cyberpunk_Cloud_3D_Test.mp4
+
+      - name: Publish video and original Blender file
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cyberpunk_Cloud_3D_Test
+          path: |
+            Cyberpunk_Cloud_3D_Test.mp4
+            CYBERPUNK_CLOUD_EXPERIMENT.blend
+          if-no-files-found: error
+          retention-days: 5
+          
