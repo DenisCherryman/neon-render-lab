@@ -23,10 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Blender and FFmpeg
+      - name: Install Blender and FFmpeg with NumPy
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y blender ffmpeg xvfb xauth libgl1-mesa-dri
+          sudo apt-get install -y blender ffmpeg xvfb xauth libgl1-mesa-dri python3-numpy
+          blender -b --python-expr "import numpy; print('NumPy OK:', numpy.__version__)"
 
       - name: Check Python files
         run: python3 -m py_compile render.py make_audio.py
@@ -35,6 +36,7 @@ jobs:
         run: |
           xvfb-run -a -s "-screen 0 1280x720x24" \
             blender -b -t 3 --python-exit-code 1 -P render.py
+          test "$(find frames -name 'frame_*.png' | wc -l)" -eq 72
 
       - name: Generate audio
         run: python3 make_audio.py
@@ -59,3 +61,4 @@ jobs:
             CYBERPUNK_CLOUD_EXPERIMENT.blend
           if-no-files-found: error
           retention-days: 5
+          
