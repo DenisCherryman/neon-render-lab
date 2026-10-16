@@ -222,7 +222,11 @@ def ph_material(name, asset, metal=0, scale=3):
     with urlopen(req, timeout=40) as response:
         data = json.load(response)
     def urls(channel):
-        choices = data[channel]
+        aliases = {'diff': ('diffuse', 'diff', 'albedo'), 'rough': ('rough', 'roughness'), 'nor_gl': ('nor_gl', 'normal')}
+        key = next((k for k in aliases[channel] if k in data), None)
+        if key is None:
+            raise RuntimeError('Texture maps available: ' + str(list(data)))
+        choices = data[key]
         for resolution in ('2k', '1k'):
             for fmt in ('jpg', 'png'):
                 if fmt in choices.get(resolution, {}):
