@@ -1,64 +1,39 @@
-name: Blender Cyberpunk Render
-
+name: Blender Cyberpunk Render 10s Textured
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - render.py
-      - make_audio.py
-      - .github/workflows/render.yml
-
+    paths: [render.py, make_audio.py, .github/workflows/render.yml]
 permissions:
   contents: read
-
 jobs:
   render:
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
-
+    timeout-minutes: 85
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Blender and FFmpeg with NumPy
+      - name: Install Blender and FFmpeg
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y blender ffmpeg xvfb xauth libgl1-mesa-dri python3-numpy
-          blender -b --python-expr "import numpy; print('NumPy OK:', numpy.__version__)"
-
       - name: Check Python files
         run: python3 -m py_compile render.py make_audio.py
-
-      - name: Render animation
+      - name: Render 240 frames with CC0 textures
         run: |
-          xvfb-run -a -s "-screen 0 1280x720x24" \
-            blender -b -t 3 --python-exit-code 1 -P render.py
-          test "$(find frames -name 'frame_*.png' | wc -l)" -eq 72
-
+          xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+          test "$(find frames -name 'frame_*.png' | wc -l)" -eq 240
       - name: Generate audio
         run: python3 make_audio.py
-
       - name: Assemble video
-        run: |
-          ffmpeg -hide_banner -loglevel error -y \
-            -framerate 24 -start_number 1 \
-            -i frames/frame_%04d.png \
-            -i action.wav \
-            -c:v libx264 -preset medium -crf 19 \
-            -pix_fmt yuv420p -c:a aac -b:a 192k \
-            -movflags +faststart -shortest \
-            Cyberpunk_Cloud_3D_Test.mp4
-
+        run: ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 1 -i frames/frame_%04d.png -i action.wav -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart -t 10 Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
       - name: Save video and scene
         uses: actions/upload-artifact@v4
         with:
-          name: Cyberpunk_Cloud_3D_Test
+          name: Cyberpunk_Cloud_3D_Test_10s_Textured
           path: |
-            Cyberpunk_Cloud_3D_Test.mp4
-            CYBERPUNK_CLOUD_EXPERIMENT.blend
+            Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+            CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
           if-no-files-found: error
           retention-days: 5
-          
