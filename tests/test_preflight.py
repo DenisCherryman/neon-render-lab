@@ -101,5 +101,36 @@ class Timeline(unittest.TestCase):
         self.assertTrue(all(actor in (0, 1) for _, actor in events))
 
 
+class PolyHavenChannels(unittest.TestCase):
+    def resolve(self, data, channel):
+        tree = ast.parse((ROOT / 'render.py').read_text())
+        material = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef)
+                        and node.name == 'ph_material')
+        urls = next(node for node in material.body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'urls')
+        namespace = {'data': data, 'asset': 'fixture'}
+        exec(compile(ast.Module(body=[urls], type_ignores=[]),
+                     'render.py', 'exec'), namespace)
+        return namespace['urls'](channel)
+
+    def test_actual_api_capitalization_and_all_candidates(self):
+        maps = {
+            'Diffuse': {'2k': {'jpg': {'url': '2k.jpg'},
+                               'png': {'url': '2k.png'}},
+                        '1k': {'jpg': {'url': '1k.jpg'}}},
+            'Rough': {'1k': {'png': {'url': 'rough.png'}}},
+            'nor_gl': {'1k': {'png': {'url': 'normal.png'}}},
+        }
+        self.assertEqual(self.resolve(maps, 'diff'),
+                         ['2k.jpg', '2k.png', '1k.jpg'])
+        self.assertEqual(self.resolve(maps, 'rough'), ['rough.png'])
+        self.assertEqual(self.resolve(maps, 'nor_gl'), ['normal.png'])
+
+    def test_missing_required_channel_is_explicit(self):
+        with self.assertRaisesRegex(RuntimeError, 'Texture maps available'):
+            self.resolve({'Diffuse': {}}, 'nor_gl')
+
+
 if __name__ == '__main__':
     unittest.main()
