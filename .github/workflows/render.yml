@@ -1,9 +1,27 @@
 name: Blender Cyberpunk Render 10s Textured
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Render preview frames first; full renders all 240 frames
+        type: choice
+        options: [preview, full]
+        default: preview
+  pull_request:
+    paths:
+      - render.py
+      - make_audio.py
+      - verify_outputs.py
+      - tests/**
+      - .github/workflows/render.yml
   push:
     branches: [main]
-    paths: [render.py, make_audio.py, .github/workflows/render.yml]
+    paths:
+      - render.py
+      - make_audio.py
+      - verify_outputs.py
+      - tests/**
+      - .github/workflows/render.yml
 permissions:
   contents: read
 jobs:
@@ -12,28 +30,61 @@ jobs:
     timeout-minutes: 85
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
+      RENDER_MODE: ${{ github.event_name == 'pull_request' && 'preview' || github.event_name == 'push' && 'full' || inputs.mode || 'preview' }}
+      PREVIEW_LIST: "1,31,32,33,34,45,46,47,48,240"
     steps:
       - uses: actions/checkout@v4
+      - name: Check Python and offline regression tests
+        run: |
+          python3 -m py_compile render.py make_audio.py verify_outputs.py tests/test_preflight.py
+          python3 -m unittest discover -s tests -v
+      - name: Generate and validate audio
+        run: |
+          python3 make_audio.py
+          python3 verify_outputs.py audio
       - name: Install Blender and FFmpeg
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y blender ffmpeg xvfb xauth libgl1-mesa-dri python3-numpy
-      - name: Check Python files
-        run: python3 -m py_compile render.py make_audio.py
+          blender --version
+          ffmpeg -version
+      - name: Render preview frames
+        if: env.RENDER_MODE == 'preview'
+        run: |
+          PREVIEW_FRAMES="$PREVIEW_LIST" xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+          python3 verify_outputs.py preview --preview-frames "$PREVIEW_LIST"
       - name: Render 240 frames with CC0 textures
+        if: env.RENDER_MODE == 'full'
         run: |
           xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
-          test "$(find frames -name 'frame_*.png' | wc -l)" -eq 240
-      - name: Generate audio
-        run: python3 make_audio.py
-      - name: Assemble video
-        run: ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 1 -i frames/frame_%04d.png -i action.wav -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart -t 10 Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+          python3 verify_outputs.py frames
+      - name: Assemble and validate video
+        if: env.RENDER_MODE == 'full'
+        run: |
+          ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 1 -i frames/frame_%04d.png -i action.wav -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart -t 10 Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+          test -s Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+          python3 verify_outputs.py video
+      - name: Check saved scene
+        run: test -s CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
+      - name: Save preview and scene
+        if: env.RENDER_MODE == 'preview'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cyberpunk_preview
+          path: |
+            preview/*.png
+            action.wav
+            CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
+          if-no-files-found: error
+          retention-days: 5
       - name: Save video and scene
+        if: env.RENDER_MODE == 'full'
         uses: actions/upload-artifact@v4
         with:
           name: Cyberpunk_Cloud_3D_Test_10s_Textured
           path: |
             Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+            action.wav
             CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
           if-no-files-found: error
           retention-days: 5

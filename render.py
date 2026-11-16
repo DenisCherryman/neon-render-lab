@@ -1,14 +1,14 @@
 """Cyberpunk cloud render V4
 10-second Blender Eevee firefight using free CC0 textures where available.
-Textures are attempted from Poly Haven's free/CC0 CDN; if unavailable, the script falls back to procedural materials.
-Run with: blender -b -P render.py
+Poly Haven surface maps are required; missing or invalid maps stop scene generation.
+Run with: blender -b --python-exit-code 1 -P render.py
 """
 import bpy
 import math
 import os
 import random
 import json
-from urllib.request import urlopen, urlretrieve, Request
+from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 from mathutils import Vector
 
@@ -40,6 +40,7 @@ scene.render.resolution_x = RES_X
 scene.render.resolution_y = RES_Y
 scene.render.resolution_percentage = 100
 scene.render.fps = FPS
+scene.render.fps_base = 1.0
 scene.frame_start = 1
 scene.frame_end = TOTAL_FRAMES
 scene.render.image_settings.file_format = 'PNG'
@@ -88,24 +89,57 @@ ASSET_DIR = os.path.abspath('./assets')
 os.makedirs(ASSET_DIR, exist_ok=True)
 
 
-def fetch(url, path):
-    req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urlopen(req, timeout=25) as r, open(path, 'wb') as f:
-        f.write(r.read())
+def fetch(url, path, validator=None):
+    """Publish only complete, optionally validated downloads."""
+    tmp = path + '.part'
+    req = Request(url, headers={'User-Agent': 'NeonRenderLab/1.0'})
+    try:
+        with urlopen(req, timeout=25) as response:
+            payload = response.read()
+            expected = response.headers.get('Content-Length')
+        if expected is not None and len(payload) != int(expected):
+            raise RuntimeError('Incomplete download: ' + url)
+        if not payload:
+            raise RuntimeError('Empty download: ' + url)
+        with open(tmp, 'wb') as output:
+            output.write(payload)
+        if validator is not None:
+            validator(tmp)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
     return path
+
+
+def validate_texture(path):
+    image = bpy.data.images.load(path, check_existing=False)
+    try:
+        if min(image.size) <= 0:
+            raise RuntimeError('Invalid texture: ' + path)
+    finally:
+        bpy.data.images.remove(image)
 
 
 def download_first(candidates, out_name):
     path = os.path.join(ASSET_DIR, out_name)
-    if os.path.exists(path) and os.path.getsize(path) > 1000:
-        return path
+    if os.path.isfile(path):
+        try:
+            validate_texture(path)
+            return path
+        except Exception as exc:
+            print('Invalid cached texture:', path, exc, flush=True)
+            os.remove(path)
+    errors = []
     for url in candidates:
         try:
-            print('Trying texture', url)
-            return fetch(url, path)
-        except Exception as e:
-            print('Texture download failed:', url, e)
-    return None
+            return fetch(url, path, validator=validate_texture)
+        except Exception as exc:
+            errors.append(f'{url}: {exc}')
+            print('Texture download failed:', url, exc, flush=True)
+    raise RuntimeError(
+        f'Required texture failed: {out_name}\n' + '\n'.join(errors)
+    )
 
 
 def load_image(path, colorspace='sRGB'):
@@ -223,15 +257,20 @@ def ph_material(name, asset, metal=0, scale=3):
         data = json.load(response)
     def urls(channel):
         aliases = {'diff': ('diffuse', 'diff', 'albedo'), 'rough': ('rough', 'roughness'), 'nor_gl': ('nor_gl', 'normal')}
-        key = next((k for k in aliases[channel] if k in data), None)
+        channels = {key.casefold(): value for key, value in data.items()}
+        key = next((k for k in aliases[channel] if k in channels), None)
         if key is None:
             raise RuntimeError('Texture maps available: ' + str(list(data)))
-        choices = data[key]
+        choices = channels[key]
+        candidates = []
         for resolution in ('2k', '1k'):
             for fmt in ('jpg', 'png'):
-                if fmt in choices.get(resolution, {}):
-                    return [choices[resolution][fmt]['url']]
-        raise RuntimeError('Missing texture channel: ' + asset + '/' + channel)
+                entry = choices.get(resolution, {}).get(fmt, {})
+                if entry.get('url'):
+                    candidates.append(entry['url'])
+        if not candidates:
+            raise RuntimeError('Missing texture channel: ' + asset + '/' + channel)
+        return candidates
     result = pbr_material(name, urls('diff'), urls('rough'), urls('nor_gl'), metal=metal, scale=scale)
     for suffix in ('_base', '_rough', '_normal'):
         if not os.path.exists(os.path.join(ASSET_DIR, name + suffix)):
@@ -298,10 +337,24 @@ area_light('Fill', (0.3,0.35,0.9), 800, (0,-10,4.2), 8)
 # ---------------- Characters ----------------
 model_url = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Soldier.glb'
 model = os.path.join(ASSET_DIR, 'Soldier.glb')
-if not os.path.exists(model):
-    urlretrieve(model_url, model)
-if os.path.getsize(model) < 50000:
-    raise RuntimeError('Soldier.glb failed to download')
+def validate_model(path):
+    with open(path, 'rb') as source:
+        header = source.read(12)
+    size = os.path.getsize(path)
+    if (len(header) != 12 or header[:4] != b'glTF'
+            or int.from_bytes(header[4:8], 'little') != 2
+            or int.from_bytes(header[8:12], 'little') != size
+            or size < 50000):
+        raise RuntimeError('Invalid or incomplete Soldier.glb: ' + path)
+
+
+if os.path.isfile(model):
+    try:
+        validate_model(model)
+    except RuntimeError:
+        os.remove(model)
+if not os.path.isfile(model):
+    fetch(model_url, model, validator=validate_model)
 
 characters = []
 for idx in range(2):
@@ -485,4 +538,15 @@ os.makedirs('frames', exist_ok=True)
 bpy.ops.file.pack_all()
 bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath('CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend'))
 print('Starting render:', TOTAL_FRAMES, 'frames at', FPS, 'fps')
-bpy.ops.render.render(animation=True)
+preview_frames = os.environ.get('PREVIEW_FRAMES', '').strip()
+if preview_frames:
+    selected = [int(value) for value in preview_frames.split(',')]
+    if any(frame < 1 or frame > TOTAL_FRAMES for frame in selected):
+        raise ValueError('Preview frame outside animation range')
+    os.makedirs('preview', exist_ok=True)
+    for frame in selected:
+        scene.frame_set(frame)
+        scene.render.filepath = os.path.abspath(f'preview/frame_{frame:04d}.png')
+        bpy.ops.render.render(write_still=True)
+else:
+    bpy.ops.render.render(animation=True)
