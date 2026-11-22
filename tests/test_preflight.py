@@ -93,12 +93,32 @@ class Timeline(unittest.TestCase):
         shots = eval(compile(ast.Expression(audio['shots']), 'shots', 'eval'),
                      {'__builtins__': {}}, {})
         self.assertEqual(fps, 24)
-        self.assertEqual(duration, 10)
+        self.assertEqual(duration, 15)
         self.assertEqual(ast.literal_eval(audio['seconds']), duration)
         self.assertEqual(shots, [(frame - 1) / fps for frame, _ in events])
-        self.assertEqual(len(events), 12)
+        self.assertEqual(len(events), 20)
         self.assertTrue(all(1 <= frame <= fps * duration for frame, _ in events))
         self.assertTrue(all(actor in (0, 1) for _, actor in events))
+
+
+class CinematicTimeline(unittest.TestCase):
+    def test_camera_cuts_cover_all_frames(self):
+        render = module_assignments('render.py')
+        cuts = ast.literal_eval(render['CAMERA_SHOTS'])
+        self.assertEqual(cuts[0][0], 1)
+        self.assertEqual(cuts[-1][1], 360)
+        self.assertTrue(all(a[1] + 1 == b[0] for a,b in zip(cuts, cuts[1:])))
+        self.assertTrue(all(start <= end and 20 <= lens <= 60
+                            for start,end,_,_,_,_,lens in cuts))
+
+    def test_actor_paths_cover_15_seconds(self):
+        render = module_assignments('render.py')
+        paths = ast.literal_eval(render['ACTOR_PATHS'])
+        self.assertEqual(len(paths), 2)
+        for path in paths:
+            self.assertEqual(path[0][0], 1)
+            self.assertEqual(path[-1][0], 360)
+            self.assertTrue(all(a[0] < b[0] for a,b in zip(path, path[1:])))
 
 
 class PolyHavenChannels(unittest.TestCase):

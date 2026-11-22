@@ -1,5 +1,5 @@
-"""Cyberpunk cloud render V4
-10-second Blender Eevee firefight using free CC0 textures where available.
+"""Cyberpunk cloud render V5
+15-second cinematic Blender Eevee firefight using free CC0 textures where available.
 Poly Haven surface maps are required; missing or invalid maps stop scene generation.
 Run with: blender -b --python-exit-code 1 -P render.py
 """
@@ -14,13 +14,15 @@ from mathutils import Vector
 
 random.seed(42)
 FPS = 24
-DURATION = 10
+DURATION = 15
 TOTAL_FRAMES = FPS * DURATION
 RES_X = 1280
 RES_Y = 720
 SHOT_EVENTS = [
-    (32,0),(46,1),(60,0),(72,1),(95,0),(106,0),
-    (122,1),(138,0),(160,1),(176,1),(196,0),(214,1)
+    (17,0),(32,1),(48,0),(65,1),(80,0),(99,1),
+    (115,0),(133,1),(147,0),(166,1),(179,0),(193,1),
+    (212,0),(227,1),(244,0),(259,1),(277,0),(302,1),
+    (321,0),(341,1)
 ]
 
 # ---------------- Scene setup ----------------
@@ -51,6 +53,7 @@ try:
     scene.view_settings.view_transform = 'AgX'
 except Exception:
     scene.view_settings.view_transform = 'Standard'
+scene.view_settings.exposure = 0.65
 scene.render.engine = 'BLENDER_EEVEE_NEXT' if bpy.app.version >= (4,2,0) else 'BLENDER_EEVEE'
 if hasattr(scene, 'eevee'):
     if hasattr(scene.eevee, 'taa_render_samples'):
@@ -77,7 +80,7 @@ ramps.color_ramp.elements[0].position = 0.22
 ramps.color_ramp.elements[0].color = (0.01,0.02,0.05,1)
 ramps.color_ramp.elements[1].position = 0.86
 ramps.color_ramp.elements[1].color = (0.05,0.02,0.08,1)
-bg.inputs['Strength'].default_value = 0.8
+bg.inputs['Strength'].default_value = 1.1
 w_links.new(texcoord.outputs['Normal'], mapping.inputs['Vector'])
 w_links.new(mapping.outputs['Vector'], grad.inputs['Vector'])
 w_links.new(grad.outputs['Color'], ramps.inputs['Fac'])
@@ -231,7 +234,7 @@ def procedural_neon(name, color):
     if em is not None:
         em.default_value = (*color,1)
     if st is not None:
-        st.default_value = 4.0
+        st.default_value = 7.0
     return m
 
 
@@ -284,6 +287,9 @@ cyan_mat = procedural_neon('Cyan_Neon', (0.0, 0.78, 1.0))
 magenta_mat = procedural_neon('Magenta_Neon', (1.0, 0.15, 0.45))
 warm_mat = procedural_neon('Warm_Neon', (1.0, 0.55, 0.08))
 paint_mat = pbr_material('Line_Paint', None, None, None, fallback=(0.72,0.74,0.78,1), scale=1.0)
+wet_mat = pbr_material('Wet_Asphalt_Reflections', None, None, None, metal=0.55,
+                       fallback=(0.015, 0.035, 0.075, 1.0))
+wet_mat.node_tree.nodes.get('Principled BSDF').inputs['Roughness'].default_value = 0.12
 
 # ---------------- Environment ----------------
 # Alleyway
@@ -315,6 +321,17 @@ for i in range(8):
     cube(f'Crate_{i}', (random.uniform(-3.8,3.8), random.uniform(-12,12), 0.45),
          (0.9+random.random()*0.7,0.9+random.random()*0.7,0.9), metal_mat, bevel=0.02)
 
+# Glossy wet patches and additional visible strips for cinematic color contrast.
+for i in range(14):
+    x = random.uniform(-4.1, 4.1)
+    y = random.uniform(-11, 10)
+    cube(f'Wet_Patch_{i}', (x, y, 0.017), (random.uniform(0.6, 2.3),
+         random.uniform(0.5, 2.5), 0.006), wet_mat)
+for side, mat in ((-1, cyan_mat), (1, magenta_mat)):
+    for j in range(4):
+        cube(f'Wall_Neon_{side}_{j}', (side*5.29, -10 + j*5, 2.3 + j%2),
+             (0.06, 2.6, 0.09), mat)
+
 # Lights
 
 def area_light(name, color, power, location, size=4.0, aim=(0,0,1.4)):
@@ -329,10 +346,14 @@ def area_light(name, color, power, location, size=4.0, aim=(0,0,1.4)):
     ob.rotation_euler = (Vector(aim) - ob.location).to_track_quat('-Z','Y').to_euler()
     return ob
 
-area_light('Key_Cyan', (0.02,0.75,1), 2300, (4.7,-7,5.6), 6)
-area_light('Rim_Magenta', (1,0.08,0.35), 2600, (-4.8,2.5,5.0), 5)
-area_light('Back_Warm', (1,0.50,0.1), 1800, (0,9,6.8), 6)
-area_light('Fill', (0.3,0.35,0.9), 800, (0,-10,4.2), 8)
+key_light = area_light('Key_Cyan', (0.02,0.75,1), 4200, (4.7,-7,5.6), 6)
+rim_light = area_light('Rim_Magenta', (1,0.08,0.35), 4800, (-4.8,2.5,5.0), 5)
+area_light('Back_Warm', (1,0.50,0.1), 3200, (0,9,6.8), 6)
+area_light('Fill', (0.3,0.35,0.9), 1600, (0,-10,4.2), 8)
+for f in range(1, TOTAL_FRAMES + 1, 4):
+    for light, base, offset in ((key_light, 4200, 0.2), (rim_light, 4800, 1.8)):
+        light.data.energy = base * (0.86 + 0.20*math.sin(f*0.14 + offset))
+        light.data.keyframe_insert(data_path='energy', frame=f)
 
 # ---------------- Characters ----------------
 model_url = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Soldier.glb'
@@ -381,7 +402,7 @@ for idx in range(2):
     if rig.animation_data and rig.animation_data.nla_tracks:
         tracks = rig.animation_data.nla_tracks
         for t in tracks:
-            t.mute = 'idle' not in t.name.lower()
+            t.mute = not any(word in t.name.lower() for word in ('idle', 'run'))
         if len(tracks) and all(t.mute for t in tracks):
             tracks[0].mute = False
     if rig.animation_data:
@@ -390,22 +411,43 @@ for idx in range(2):
             if not track.mute:
                 for strip in track.strips:
                     strip.repeat = max(1, TOTAL_FRAMES / max(1, strip.action_frame_end-strip.action_frame_start) + 1)
+                    # Blend imported running motion with idle around action beats.
+                    if 'run' in track.name.lower():
+                        strip.use_animated_influence = True
+                        for f, weight in ((1,0.9),(70,0.9),(95,0.15),
+                                          (155,0.20),(211,0.9),(270,0.9),
+                                          (300,0.15),(360,0.25)):
+                            strip.influence = weight
+                            strip.keyframe_insert(data_path='influence', frame=f)
     characters.append((root, rig))
 
-# simple root movement
-for frame in range(1, TOTAL_FRAMES+1):
-    phase = (frame-1)/(TOTAL_FRAMES-1)
-    lx = -2.4 + 0.9*phase
-    ly = -1.6 + 0.35*math.sin(phase*math.pi*2.4)
-    rx =  2.4 - 0.9*phase
-    ry =  1.6 - 0.25*math.sin(phase*math.pi*2.0+1.1)
+# Choreographed paths: advances, retreats and lateral dodges.
+ACTOR_PATHS = [
+    [(1,(-3.4,-4.3)),(48,(-2.2,-2.4)),(90,(-3.5,-1.3)),
+     (142,(-1.9,-0.2)),(205,(-3.1,-1.9)),(272,(-1.8,0.7)),
+     (360,(-2.6,1.8))],
+    [(1,(3.8,4.0)),(58,(2.1,2.0)),(111,(3.8,-0.5)),
+     (165,(1.5,1.7)),(220,(3.2,0.2)),(288,(1.6,2.4)),
+     (360,(2.9,3.3))]
+]
+
+
+def path_position(path, frame):
+    for (f0, p0), (f1, p1) in zip(path, path[1:]):
+        if f0 <= frame <= f1:
+            t = (frame - f0) / (f1 - f0)
+            t = t*t*(3-2*t)
+            return (p0[0] + (p1[0]-p0[0])*t,
+                    p0[1] + (p1[1]-p0[1])*t)
+    return path[-1][1]
+
+
+for frame in range(1, TOTAL_FRAMES + 1):
     for idx, (root, _) in enumerate(characters):
-        if idx == 0:
-            root.location = (lx, ly, 0.04)
-            root.rotation_euler.z = 0.18 + 0.08*math.sin(phase*math.pi*2)
-        else:
-            root.location = (rx, ry, 0.04)
-            root.rotation_euler.z = math.pi - 0.25 + 0.08*math.sin(phase*math.pi*2+1.2)
+        x, y = path_position(ACTOR_PATHS[idx], frame)
+        # Movement remains procedural; imported Run motion provides leg action.
+        root.location = (x, y, 0.04 + 0.025*abs(math.sin(frame*0.28 + idx)))
+        root.rotation_euler.z = (0.22 if idx == 0 else math.pi - 0.25) + 0.18*math.sin(frame*0.045 + idx)
         root.keyframe_insert('location', frame=frame)
         root.keyframe_insert('rotation_euler', frame=frame)
 
@@ -463,9 +505,21 @@ for idx, weapon in enumerate(weapons):
     flash.data.materials.append(warm_mat if idx==0 else cyan_mat)
     for f in range(1, TOTAL_FRAMES+1):
         d = min((f-s for s in own_shots if f >= s), default=99)
-        scale = 1.7 if d == 0 else 0.7 if d == 1 else 0.001
+        scale = 3.8 if d == 0 else 1.5 if d == 1 else 0.001
         flash.scale = (scale, scale, scale)
         flash.keyframe_insert('scale', frame=f)
+    muzzle_data = bpy.data.lights.new(f'Muzzle_Light_{idx}', 'POINT')
+    muzzle_data.color = (1.0, 0.37, 0.04) if idx == 0 else (0.02, 0.75, 1.0)
+    muzzle_data.energy = 0
+    muzzle_data.shadow_soft_size = 0.35
+    muzzle = bpy.data.objects.new(f'Muzzle_Light_{idx}', muzzle_data)
+    bpy.context.collection.objects.link(muzzle)
+    muzzle.parent = weapon
+    muzzle.location = (0, 0.56, 0.012)
+    for shot in own_shots:
+        for f, energy in ((shot - 1, 0), (shot, 1200), (shot + 2, 0)):
+            muzzle_data.energy = energy
+            muzzle_data.keyframe_insert(data_path='energy', frame=f)
 
 for shot, actor in SHOT_EVENTS:
     scene.frame_set(shot)
@@ -508,35 +562,63 @@ for shot, actor in SHOT_EVENTS:
         tracer.scale = (vis, vis, vis)
         tracer.keyframe_insert('scale', frame=f)
 
-# ---------------- Camera ----------------
-bpy.ops.object.camera_add(location=(0,-11.5,3.2))
+# ---------------- Camera: eight cuts with independent dolly / whip movements ----------------
+# (first_frame, last_frame, start_location, end_location, start_focus, end_focus, lens_mm)
+CAMERA_SHOTS = [
+    (1,36,(-3.3,-8.4,1.7),(-1.9,-5.0,1.6),(-1.8,0.3,1.3),(-1.5,-1.5,1.3),36),
+    (37,80,(-4.2,-4.1,1.8),(-3.1,-2.9,1.8),(2.3,1.8,1.5),(2.2,1.1,1.4),48),
+    (81,124,(-3.4,-5.0,1.6),(2.5,-4.8,2.2),(0,0.3,1.5),(0,0.7,1.5),36),
+    (125,165,(3.7,-4.3,1.8),(2.7,-3.0,1.6),(-2.4,-0.7,1.4),(-2.0,-0.5,1.4),50),
+    (166,205,(0.0,-8.0,3.3),(1.3,-5.3,2.5),(0,0.4,1.4),(0,0.9,1.4),30),
+    (206,250,(-3.6,-4.2,1.5),(2.9,-3.5,1.8),(1,1,1.5),(-1,0,1.6),42),
+    (251,300,(3.6,-4.2,1.5),(2.1,-2.9,1.5),(-1.4,0.4,1.3),(-1.9,0.9,1.4),50),
+    (301,360,(0.0,-7.7,2.6),(-0.8,-3.8,1.8),(0,1.0,1.5),(0,2.0,1.4),35)
+]
+bpy.ops.object.camera_add(location=CAMERA_SHOTS[0][2])
 camera = bpy.context.object
 scene.camera = camera
-camera.data.lens = 32
-focus = Vector((0, 0.5, 1.5))
 all_shots = [f for f,_ in SHOT_EVENTS]
-for f in range(1, TOTAL_FRAMES+1):
-    phase = (f-1)/(TOTAL_FRAMES-1)
-    # 3-part move: intro dolly, orbit, push-in
-    x = 2.8*math.sin(phase*math.pi*1.15)
-    y = -8.8 + 2.4*phase + 0.6*math.sin(phase*math.pi*4)
-    z = 3.1 + 0.25*math.sin(phase*math.pi*2.7)
-    shake = Vector((0,0,0))
+for f in range(1, TOTAL_FRAMES + 1):
+    beat = next(shot for shot in CAMERA_SHOTS if shot[0] <= f <= shot[1])
+    first, last, a, b, look_a, look_b, lens = beat
+    t = (f - first) / max(1, last - first)
+    pos = Vector(a).lerp(Vector(b), t)
+    focus = Vector(look_a).lerp(Vector(look_b), t)
+    shake = Vector((0.025*math.sin(f*0.73), 0.0, 0.018*math.sin(f*1.13)))
     for s in all_shots:
         dt = f - s
-        if 0 <= dt <= 8:
-            amp = 0.09*math.exp(-dt/2.7)
-            shake += Vector((math.sin(dt*6.2+s)*amp, math.sin(dt*4.8)*amp*0.35, math.cos(dt*5.2)*amp))
-    camera.location = Vector((x,y,z)) + shake
+        if 0 <= dt <= 6:
+            amp = 0.16*math.exp(-dt/2.2)
+            shake += Vector((math.sin(dt*6.2+s)*amp, math.sin(dt*4.8)*amp*0.3, math.cos(dt*5.2)*amp))
+    camera.location = pos + shake
     camera.rotation_euler = (focus - camera.location).to_track_quat('-Z','Y').to_euler()
+    camera.data.lens = lens + 2.0*math.sin(t*math.pi)
     camera.keyframe_insert('location', frame=f)
     camera.keyframe_insert('rotation_euler', frame=f)
+    camera.data.keyframe_insert(data_path='lens', frame=f)
+
+# Bloom works through compositing across Blender Eevee versions.
+try:
+    scene.use_nodes = True
+    tree = scene.node_tree
+    tree.nodes.clear()
+    layers = tree.nodes.new('CompositorNodeRLayers')
+    glare = tree.nodes.new('CompositorNodeGlare')
+    glare.glare_type = 'FOG_GLOW'
+    glare.quality = 'HIGH'
+    glare.threshold = 1.3
+    glare.mix = -0.82
+    composite = tree.nodes.new('CompositorNodeComposite')
+    tree.links.new(layers.outputs['Image'], glare.inputs['Image'])
+    tree.links.new(glare.outputs['Image'], composite.inputs['Image'])
+except (AttributeError, TypeError, ValueError) as exc:
+    print('Optional glow unavailable:', exc, flush=True)
 
 # ---------------- Save + render ----------------
 scene.frame_set(1)
 os.makedirs('frames', exist_ok=True)
 bpy.ops.file.pack_all()
-bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath('CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend'))
+bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath('CYBERPUNK_CLOUD_EXPERIMENT_V5_15s.blend'))
 print('Starting render:', TOTAL_FRAMES, 'frames at', FPS, 'fps')
 preview_frames = os.environ.get('PREVIEW_FRAMES', '').strip()
 if preview_frames:

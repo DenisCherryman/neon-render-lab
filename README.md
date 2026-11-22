@@ -1,13 +1,21 @@
 # neon-render-lab
 
-10-second Cyberpunk Blender scene: 1280x720, 24 fps, 240 frames.
+15-second cinematic Cyberpunk Blender scene: 1280×720, 24 fps, 360 frames.
+
+## Scene V5: cinematic action
+
+- Eight camera beats with fast lateral movement, over-the-shoulder angles, whip pans and close-up shots.
+- Two actors follow choreographed paths with advances, retreats and dodges; blend imported run animation when available.
+- Neon cyan/magenta accent lighting, animated light pulses, reflective wet-ground patches, brighter muzzle flashes and momentary point lights.
+- Twenty visual/audio shot events synced frame-by-frame. Synthetic mono 32 kHz 16-bit WAV lasts exactly 15 seconds.
+- CC0 Poly Haven surfaces and original Soldier.glb import still used. Keep this PR in draft until visual inspection.
 
 ## Validation before a full render
 
-Pull requests run offline regression checks, generate and validate audio, and
-render ten preview frames: 1, 31–34, 45–48, 240. Manual Actions runs default to
-preview; select full explicitly for all frames. Pushes to main retain the
-existing full-render behavior.
+Pull requests run offline regression checks, audio generation and preview frames:
+`1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360`.
+Manual Actions runs default to `preview`; select `full` explicitly for the full 360-frame render.
+Pushes to `main` retain full-render behavior.
 
 Local commands, from the repository root:
 
@@ -15,40 +23,28 @@ Local commands, from the repository root:
 python3 -m unittest discover -s tests -v
 python3 make_audio.py
 python3 verify_outputs.py audio
-PREVIEW_FRAMES=1,31,32,33,34,45,46,47,48,240 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+PREVIEW_FRAMES=1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
 python3 verify_outputs.py preview
 ```
 
-Inspect texture tiling, weapon grip, tracer direction, muzzle flashes and both
-actors. Listen to action.wav: it is synthesized mono PCM, not recorded gunshots.
-The first shot starts at 31/24 seconds and the last at 213/24 seconds.
-Offline tests compare all audio shot times against the visual event list.
+Inspect *all camera cuts*, imported run animation, skin/props, puddles,
+muzzle flashes, weapon grip, tracer direction, highlight detail and both actors.
+Watch for black frames or clipping caused by close camera moves.
 
-The full workflow checks PNG filenames, headers and dimensions; validates WAV
-sample count and format; probes the MP4 dimensions, FPS, decoded frame count,
-audio and duration; then fully decodes the video and audio streams.
+The full workflow checks all 360 PNG headers and dimensions, WAV sample count,
+MP4 dimensions/FPS/decoded frame count/duration, and decodes both MP4 streams.
+Expected full artifact: `Cyberpunk_Cloud_3D_Cinematic_15s` with MP4, WAV and V5 .blend.
 
 ## Assets and reproducibility
 
-Poly Haven surface maps are required. Downloads use temporary files, validate
-images before publishing them to the cache, and try available 2K/1K JPG/PNG
-candidates. A missing required map fails explicitly. A cached Soldier.glb is
-checked for its GLB header and declared size before import.
+Poly Haven surface maps are required. Downloads validate imagery before publishing
+cache files and try 2K/1K JPG/PNG candidates. Cached Soldier.glb validates GLB header
+and size. `pack_all` runs before saving V5 .blend.
 
-The scene calls pack_all before saving. Reopen the saved blend without the
-original assets directory to confirm portability; this is still a manual check.
+Reopen the saved blend without original assets to confirm portability.
+Blender installed via Ubuntu 24.04 apt and the three.js/master model are not pinned
+to exact revisions. Fix those after visual acceptance. Timeout is **150 minutes**,
+not a guaranteed render time. Full render could take longer than prior V4's
+240-frame run; **do not run full until preview has been reviewed**.
 
-Blender is installed from Ubuntu 24.04 packages and its version is logged.
-Soldier.glb still references three.js/master. Pin an actually validated Blender
-version and model revision after a successful preview, rather than guessing.
-The 85-minute timeout is a limit, not a measured completion-time guarantee.
-
-Legacy 3-second workflows are archived under archive/workflows and must not be
-activated: they overwrite the current Python source with embedded old code.
-
-## Review status
-
-These changes were prepared through the GitHub API because local execution was
-unavailable. No local Python, Blender, audio listening, or render validation was
-performed. Check the pull request Actions run and inspect its artifacts before
-treating materials, sound or the full render as verified.
+Legacy 3-second workflows remain archived; do not reactivate them.

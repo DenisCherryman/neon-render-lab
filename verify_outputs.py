@@ -1,4 +1,4 @@
-"""Validate this 10-second render's WAV, PNG sequence and encoded MP4."""
+"""Validate the 15-second cinematic render's WAV, PNG sequence and MP4."""
 import argparse
 import json
 from pathlib import Path
@@ -6,9 +6,9 @@ import subprocess
 import wave
 
 FPS = 24
-FRAMES = 240
-DURATION = 10
-VIDEO = 'Cyberpunk_Cloud_3D_Test_10s_Textured.mp4'
+FRAMES = 360
+DURATION = 15
+VIDEO = 'Cyberpunk_Cloud_3D_Cinematic_15s.mp4'
 
 
 def require(condition, message):
@@ -21,9 +21,9 @@ def check_audio():
         require(audio.getnchannels() == 1, 'Expected mono WAV')
         require(audio.getsampwidth() == 2, 'Expected 16-bit PCM')
         require(audio.getframerate() == 32000, 'Expected 32000 Hz')
-        require(audio.getnframes() == 320000, 'Expected exactly 10 seconds')
+        require(audio.getnframes() == 480000, 'Expected exactly 15 seconds')
         payload = audio.readframes(audio.getnframes())
-        require(len(payload) == 640000, 'Truncated WAV payload')
+        require(len(payload) == 960000, 'Truncated WAV payload')
 
 
 def check_frames(directory, frames):
@@ -71,7 +71,7 @@ def check_video():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', choices=('audio', 'frames', 'preview', 'video'))
-    parser.add_argument('--preview-frames', default='1,31,32,33,34,45,46,47,48,240')
+    parser.add_argument('--preview-frames', default='1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360')
     args = parser.parse_args()
     if args.mode == 'audio':
         check_audio()

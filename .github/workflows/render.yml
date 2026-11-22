@@ -1,9 +1,9 @@
-name: Blender Cyberpunk Render 10s Textured
+name: Blender Cyberpunk Render 15s Cinematic
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Render preview frames first; full renders all 240 frames
+        description: Render preview frames first; full renders all 360 frames
         type: choice
         options: [preview, full]
         default: preview
@@ -27,11 +27,11 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-24.04
-    timeout-minutes: 85
+    timeout-minutes: 150
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
       RENDER_MODE: ${{ github.event_name == 'pull_request' && 'preview' || github.event_name == 'push' && 'full' || inputs.mode || 'preview' }}
-      PREVIEW_LIST: "1,31,32,33,34,45,46,47,48,240"
+      PREVIEW_LIST: "1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360"
     steps:
       - uses: actions/checkout@v4
       - name: Check Python and offline regression tests
@@ -53,7 +53,7 @@ jobs:
         run: |
           PREVIEW_FRAMES="$PREVIEW_LIST" xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
           python3 verify_outputs.py preview --preview-frames "$PREVIEW_LIST"
-      - name: Render 240 frames with CC0 textures
+      - name: Render 360 frames with CC0 textures
         if: env.RENDER_MODE == 'full'
         run: |
           xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
@@ -61,11 +61,11 @@ jobs:
       - name: Assemble and validate video
         if: env.RENDER_MODE == 'full'
         run: |
-          ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 1 -i frames/frame_%04d.png -i action.wav -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart -t 10 Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
-          test -s Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+          ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 1 -i frames/frame_%04d.png -i action.wav -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart -t 15 Cyberpunk_Cloud_3D_Cinematic_15s.mp4
+          test -s Cyberpunk_Cloud_3D_Cinematic_15s.mp4
           python3 verify_outputs.py video
       - name: Check saved scene
-        run: test -s CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
+        run: test -s CYBERPUNK_CLOUD_EXPERIMENT_V5_15s.blend
       - name: Save preview and scene
         if: env.RENDER_MODE == 'preview'
         uses: actions/upload-artifact@v4
@@ -74,17 +74,17 @@ jobs:
           path: |
             preview/*.png
             action.wav
-            CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
+            CYBERPUNK_CLOUD_EXPERIMENT_V5_15s.blend
           if-no-files-found: error
           retention-days: 5
       - name: Save video and scene
         if: env.RENDER_MODE == 'full'
         uses: actions/upload-artifact@v4
         with:
-          name: Cyberpunk_Cloud_3D_Test_10s_Textured
+          name: Cyberpunk_Cloud_3D_Cinematic_15s
           path: |
-            Cyberpunk_Cloud_3D_Test_10s_Textured.mp4
+            Cyberpunk_Cloud_3D_Cinematic_15s.mp4
             action.wav
-            CYBERPUNK_CLOUD_EXPERIMENT_V4_10s.blend
+            CYBERPUNK_CLOUD_EXPERIMENT_V5_15s.blend
           if-no-files-found: error
           retention-days: 5
