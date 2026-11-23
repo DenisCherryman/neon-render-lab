@@ -31,7 +31,7 @@ jobs:
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
       RENDER_MODE: ${{ github.event_name == 'pull_request' && 'preview' || github.event_name == 'push' && 'full' || inputs.mode || 'preview' }}
-      PREVIEW_LIST: "1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360"
+      PREVIEW_LIST: "1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360"
     steps:
       - uses: actions/checkout@v4
       - name: Check Python and offline regression tests

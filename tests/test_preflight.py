@@ -102,6 +102,16 @@ class Timeline(unittest.TestCase):
 
 
 class CinematicTimeline(unittest.TestCase):
+    def test_reciprocal_firefight(self):
+        events = ast.literal_eval(module_assignments('render.py')['SHOT_EVENTS'])
+        self.assertEqual({actor for _,actor in events}, {0,1})
+        self.assertTrue(all(a != b for (_,a),(_,b) in zip(events,events[1:])))
+        self.assertTrue(all(a < b for (a,_),(b,_) in zip(events,events[1:])))
+        src = (ROOT/'render.py').read_text()
+        self.assertIn('Beam_to_actor_',src)
+        self.assertIn('Impact_actor_',src)
+        self.assertIn('other_x, other_y = path_position',src)
+
     def test_camera_cuts_cover_all_frames(self):
         render = module_assignments('render.py')
         cuts = ast.literal_eval(render['CAMERA_SHOTS'])

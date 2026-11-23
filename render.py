@@ -53,7 +53,7 @@ try:
     scene.view_settings.view_transform = 'AgX'
 except Exception:
     scene.view_settings.view_transform = 'Standard'
-scene.view_settings.exposure = 0.65
+scene.view_settings.exposure = -0.42
 scene.render.engine = 'BLENDER_EEVEE_NEXT' if bpy.app.version >= (4,2,0) else 'BLENDER_EEVEE'
 if hasattr(scene, 'eevee'):
     if hasattr(scene.eevee, 'taa_render_samples'):
@@ -234,7 +234,7 @@ def procedural_neon(name, color):
     if em is not None:
         em.default_value = (*color,1)
     if st is not None:
-        st.default_value = 7.0
+        st.default_value = 3.2
     return m
 
 
@@ -346,12 +346,12 @@ def area_light(name, color, power, location, size=4.0, aim=(0,0,1.4)):
     ob.rotation_euler = (Vector(aim) - ob.location).to_track_quat('-Z','Y').to_euler()
     return ob
 
-key_light = area_light('Key_Cyan', (0.02,0.75,1), 4200, (4.7,-7,5.6), 6)
-rim_light = area_light('Rim_Magenta', (1,0.08,0.35), 4800, (-4.8,2.5,5.0), 5)
-area_light('Back_Warm', (1,0.50,0.1), 3200, (0,9,6.8), 6)
-area_light('Fill', (0.3,0.35,0.9), 1600, (0,-10,4.2), 8)
+key_light = area_light('Key_Cyan', (0.02,0.75,1), 2500, (4.7,-7,5.6), 6)
+rim_light = area_light('Rim_Magenta', (1,0.08,0.35), 2900, (-4.8,2.5,5.0), 5)
+area_light('Back_Warm', (1,0.50,0.1), 1900, (0,9,6.8), 6)
+area_light('Fill', (0.3,0.35,0.9), 950, (0,-10,4.2), 8)
 for f in range(1, TOTAL_FRAMES + 1, 4):
-    for light, base, offset in ((key_light, 4200, 0.2), (rim_light, 4800, 1.8)):
+    for light, base, offset in ((key_light, 2500, 0.2), (rim_light, 2900, 1.8)):
         light.data.energy = base * (0.86 + 0.20*math.sin(f*0.14 + offset))
         light.data.keyframe_insert(data_path='energy', frame=f)
 
@@ -423,12 +423,12 @@ for idx in range(2):
 
 # Choreographed paths: advances, retreats and lateral dodges.
 ACTOR_PATHS = [
-    [(1,(-3.4,-4.3)),(48,(-2.2,-2.4)),(90,(-3.5,-1.3)),
-     (142,(-1.9,-0.2)),(205,(-3.1,-1.9)),(272,(-1.8,0.7)),
-     (360,(-2.6,1.8))],
-    [(1,(3.8,4.0)),(58,(2.1,2.0)),(111,(3.8,-0.5)),
-     (165,(1.5,1.7)),(220,(3.2,0.2)),(288,(1.6,2.4)),
-     (360,(2.9,3.3))]
+    [(1,(-2.3,-2.6)),(48,(-1.7,-1.4)),(90,(-2.6,-0.6)),
+     (142,(-1.5,-0.2)),(205,(-2.1,-1.2)),(272,(-1.4,0.5)),
+     (360,(-2.0,1.2))],
+    [(1,(2.3,1.6)),(58,(1.7,0.8)),(111,(2.6,-0.1)),
+     (165,(1.3,0.6)),(220,(2.2,0.1)),(288,(1.4,1.3)),
+     (360,(2.0,1.9))]
 ]
 
 
@@ -445,53 +445,56 @@ def path_position(path, frame):
 for frame in range(1, TOTAL_FRAMES + 1):
     for idx, (root, _) in enumerate(characters):
         x, y = path_position(ACTOR_PATHS[idx], frame)
-        # Movement remains procedural; imported Run motion provides leg action.
-        root.location = (x, y, 0.04 + 0.025*abs(math.sin(frame*0.28 + idx)))
-        root.rotation_euler.z = (0.22 if idx == 0 else math.pi - 0.25) + 0.18*math.sin(frame*0.045 + idx)
+        other_x, other_y = path_position(ACTOR_PATHS[1-idx], frame)
+        # The two soldiers face one another rather than always looking down the alley.
+        dx, dy = other_x-x, other_y-y
+        heading = math.atan2(-dx, dy)
+        impact = 0.0
+        for shot, attacker in SHOT_EVENTS:
+            if attacker != idx and 0 <= frame-shot <= 6:
+                impact += 0.14*math.exp(-(frame-shot)/2.4)
+        away = Vector((x-other_x, y-other_y, 0))
+        if away.length > 0.01:
+            away.normalize()
+        root.location = (x + away.x*impact, y + away.y*impact,
+                         0.04 + 0.028*abs(math.sin(frame*0.26 + idx))-0.07*impact)
+        root.rotation_euler = (impact*0.9, 0.05*math.sin(frame*0.11+idx),
+                               heading + 0.035*math.sin(frame*0.13+idx))
         root.keyframe_insert('location', frame=frame)
         root.keyframe_insert('rotation_euler', frame=frame)
 
-# ---------------- Weapons ----------------
+# ---------------- Weapons: both rifles track the opposing soldier ----------------
 def weapon_for(rig, idx):
-    names = [b.name for b in rig.data.bones]
-    candidates = [n for n in names if ('right' in n.lower() or n.lower().endswith('.r')) and 'hand' in n.lower()]
-    candidates = candidates or [n for n in names if 'hand' in n.lower()]
-    hand = candidates[0] if candidates else None
     anchor = bpy.data.objects.new(f'Weapon_{idx}', None)
     bpy.context.collection.objects.link(anchor)
-    anchor.parent = rig
-    if hand:
-        anchor.parent_type = 'BONE'
-        anchor.parent_bone = hand
-        anchor.location = (0, 0.04, 0.02)
-        anchor.rotation_euler = (math.radians(90), 0, 0)
-    else:
-        anchor.location = (0, -0.15, 1.2)
-    receiver = cube(f'Receiver_{idx}', (0,0,0), (0.13,0.34,0.13), metal_mat, bevel=0.01)
-    barrel = cube(f'Barrel_{idx}', (0,0,0), (0.07,0.28,0.07), metal_mat, bevel=0.006)
-    grip = cube(f'Grip_{idx}', (0,0,0), (0.085,0.11,0.24), wall_mat, bevel=0.008)
-    neon = cube(f'Neon_{idx}', (0,0,0), (0.025,0.21,0.014), cyan_mat if idx==0 else magenta_mat, bevel=0.003)
-    sight = cube(f'Sight_{idx}', (0,0,0), (0.02,0.06,0.03), warm_mat, bevel=0.003)
-    for ob, loc in [(receiver,(0,0.12,0)),(barrel,(0,0.39,0.01)),(grip,(0,-0.09,-0.14)),(neon,(0,0.21,0.06)),(sight,(0,0.16,0.09))]:
-        ob.parent = anchor
-        ob.location = loc
+    receiver = cube(f'Receiver_{idx}', (0,0,0), (0.20,0.62,0.19), metal_mat, bevel=0.012)
+    barrel = cube(f'Barrel_{idx}', (0,0,0), (0.095,0.49,0.095), metal_mat, bevel=0.006)
+    grip = cube(f'Grip_{idx}', (0,0,0), (0.095,0.13,0.26), wall_mat, bevel=0.009)
+    neon = cube(f'Neon_{idx}', (0,0,0), (0.05,0.37,0.02),
+                cyan_mat if idx==0 else magenta_mat, bevel=0.004)
+    sight = cube(f'Sight_{idx}', (0,0,0), (0.04,0.09,0.05), warm_mat, bevel=0.004)
+    for obj, loc in [(receiver,(0,0.18,0)), (barrel,(0,0.58,0)),
+                     (grip,(0,-0.13,-0.16)), (neon,(0,0.3,0.11)),
+                     (sight,(0,0.27,0.13))]:
+        obj.parent = anchor
+        obj.location = loc
     return anchor
 
-weapons = [weapon_for(rig, i) for i,(_,rig) in enumerate(characters)]
 
-# animate weapon recoil
+weapons = [weapon_for(rig, idx) for idx, (_, rig) in enumerate(characters)]
 for idx, weapon in enumerate(weapons):
-    own_shots = [f for f,a in SHOT_EVENTS if a == idx]
-    for f in range(1, TOTAL_FRAMES+1):
-        kick = 0.0
-        for s in own_shots:
-            dt = f - s
-            if 0 <= dt <= 3:
-                kick += (0.11 if dt == 0 else 0.05 if dt == 1 else 0.02)
-        weapon.location = (weapon.location.x, 0.04-kick*0.7 if weapon.parent_bone else weapon.location.y, 0.02-kick*0.25 if weapon.parent_bone else weapon.location.z)
-        weapon.rotation_euler = (math.radians(90)-kick, 0, 0)
-        weapon.keyframe_insert('location', frame=f)
-        weapon.keyframe_insert('rotation_euler', frame=f)
+    own_shots = [f for f,actor in SHOT_EVENTS if actor == idx]
+    for frame in range(1, TOTAL_FRAMES + 1):
+        x, y = path_position(ACTOR_PATHS[idx], frame)
+        tx, ty = path_position(ACTOR_PATHS[1-idx], frame)
+        direction = Vector((tx-x,ty-y,0.06)).normalized()
+        recoil = sum(0.19*math.exp(-(frame-shot)/1.5)
+                     for shot in own_shots if 0 <= frame-shot <= 4)
+        # Explicit chest-level aiming is readable even if imported hand bones differ.
+        weapon.location = Vector((x,y,1.25)) + 0.35*direction-recoil*direction
+        weapon.rotation_euler = direction.to_track_quat('Y','Z').to_euler()
+        weapon.keyframe_insert('location', frame=frame)
+        weapon.keyframe_insert('rotation_euler', frame=frame)
 
 # muzzle flashes and shell ejection
 brass = pbr_material('Brass', None, None, None, metal=0.9, fallback=(0.63,0.42,0.12,1), scale=1)
@@ -505,7 +508,7 @@ for idx, weapon in enumerate(weapons):
     flash.data.materials.append(warm_mat if idx==0 else cyan_mat)
     for f in range(1, TOTAL_FRAMES+1):
         d = min((f-s for s in own_shots if f >= s), default=99)
-        scale = 3.8 if d == 0 else 1.5 if d == 1 else 0.001
+        scale = 3.0 if d == 0 else 1.2 if d == 1 else 0.001
         flash.scale = (scale, scale, scale)
         flash.keyframe_insert('scale', frame=f)
     muzzle_data = bpy.data.lights.new(f'Muzzle_Light_{idx}', 'POINT')
@@ -517,7 +520,7 @@ for idx, weapon in enumerate(weapons):
     muzzle.parent = weapon
     muzzle.location = (0, 0.56, 0.012)
     for shot in own_shots:
-        for f, energy in ((shot - 1, 0), (shot, 1200), (shot + 2, 0)):
+        for f, energy in ((shot - 1, 0), (shot, 750), (shot + 2, 0)):
             muzzle_data.energy = energy
             muzzle_data.keyframe_insert(data_path='energy', frame=f)
 
@@ -544,60 +547,96 @@ for shot, actor in SHOT_EVENTS:
             casing.keyframe_insert('rotation_euler', frame=f)
         casing.keyframe_insert('scale', frame=f)
 
-# tracer beams
-for shot, actor in SHOT_EVENTS:
+# Directed energy exchange: every projectile visibly connects shooter and opponent.
+def glowing_segment(name, start, end, material, radius=0.035):
+    delta = end-start
+    bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=radius,
+                                        depth=delta.length, location=(start+end)*0.5)
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_euler = delta.to_track_quat('Z', 'Y').to_euler()
+    obj.data.materials.append(material)
+    return obj
+
+
+for shot, attacker in SHOT_EVENTS:
     scene.frame_set(shot)
     bpy.context.view_layer.update()
-    transform = weapons[actor].matrix_world.copy()
-    origin = transform @ Vector((0, 0.55, 0.012))
-    direction = (transform.to_quaternion() @ Vector((0, 1, 0))).normalized()
-    length = 2.4
-    mid = origin + direction * length / 2
-    bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=0.008, depth=length, location=mid)
-    tracer = bpy.context.object
-    tracer.data.materials.append(warm_mat)
-    tracer.rotation_euler = direction.to_track_quat('Z', 'Y').to_euler()
-    for f in range(1, TOTAL_FRAMES+1):
-        vis = 1.0 if shot <= f <= shot+1 else 0.001
-        tracer.scale = (vis, vis, vis)
-        tracer.keyframe_insert('scale', frame=f)
+    defender = 1-attacker
+    tx,ty = path_position(ACTOR_PATHS[defender],shot)
+    target = Vector((tx,ty,1.43))
+    origin = weapons[attacker].matrix_world @ Vector((0,0.89,0))
+    material = warm_mat if attacker == 0 else cyan_mat
+    beam = glowing_segment(f'Beam_to_actor_{defender}_at_{shot}',
+                           origin,target,material,0.045)
+    # Force a complete, readable line of fire for two frames.
+    for frame, vis in ((shot-1,0.001),(shot,1.0),(shot+2,1.0),(shot+4,0.001)):
+        beam.scale = (vis,vis,vis)
+        beam.keyframe_insert('scale',frame=frame)
 
-# ---------------- Camera: eight cuts with independent dolly / whip movements ----------------
-# (first_frame, last_frame, start_location, end_location, start_focus, end_focus, lens_mm)
+    # Shield-impact starburst at the exact location of the second character.
+    for n in range(6):
+        direction = Vector((math.cos(n*math.pi/3),
+                            math.sin(n*math.pi/3),
+                            0.35*math.sin(n*math.pi/2)))
+        spark = glowing_segment(f'Impact_actor_{defender}_{shot}_{n}',
+                               target-direction*0.37,
+                               target+direction*0.37,material,0.025)
+        for frame, vis in ((shot-1,0.001),(shot,0.5),
+                           (shot+2,1.25),(shot+5,0.001)):
+            spark.scale = (vis,vis,vis)
+            spark.keyframe_insert('scale',frame=frame)
+
+    hit_light_data = bpy.data.lights.new(f'HitLight_{shot}','POINT')
+    hit_light_data.color = (1.0,0.42,0.08) if attacker==0 else (0.05,0.8,1.0)
+    hit_light_data.energy = 0.0
+    hit_light_data.shadow_soft_size = 0.35
+    hit_light = bpy.data.objects.new(f'HitLight_{shot}',hit_light_data)
+    bpy.context.collection.objects.link(hit_light)
+    hit_light.location = target
+    for frame,power in ((shot-1,0),(shot,500),(shot+2,230),(shot+5,0)):
+        hit_light_data.energy = power
+        hit_light_data.keyframe_insert('energy',frame=frame)
+
+# ---------------- Camera: the duel and reciprocal attacks stay in view ----------------
+# Eight connected shots: wide exchanges interleaved with opposing shoulders.
 CAMERA_SHOTS = [
-    (1,36,(-3.3,-8.4,1.7),(-1.9,-5.0,1.6),(-1.8,0.3,1.3),(-1.5,-1.5,1.3),36),
-    (37,80,(-4.2,-4.1,1.8),(-3.1,-2.9,1.8),(2.3,1.8,1.5),(2.2,1.1,1.4),48),
-    (81,124,(-3.4,-5.0,1.6),(2.5,-4.8,2.2),(0,0.3,1.5),(0,0.7,1.5),36),
-    (125,165,(3.7,-4.3,1.8),(2.7,-3.0,1.6),(-2.4,-0.7,1.4),(-2.0,-0.5,1.4),50),
-    (166,205,(0.0,-8.0,3.3),(1.3,-5.3,2.5),(0,0.4,1.4),(0,0.9,1.4),30),
-    (206,250,(-3.6,-4.2,1.5),(2.9,-3.5,1.8),(1,1,1.5),(-1,0,1.6),42),
-    (251,300,(3.6,-4.2,1.5),(2.1,-2.9,1.5),(-1.4,0.4,1.3),(-1.9,0.9,1.4),50),
-    (301,360,(0.0,-7.7,2.6),(-0.8,-3.8,1.8),(0,1.0,1.5),(0,2.0,1.4),35)
+    (1,42, (0.0,-9.8,2.7),(-1.3,-8.7,2.25),(0,0,1.5),(0,0,1.5),28),
+    (43,84,(-3.1,-7.6,1.75),(-1.7,-7.0,1.7),(0,0,1.5),(0,0,1.5),30),
+    (85,126,(2.1,-8.3,2.15),(0,-7.2,2.0),(0,0,1.5),(0,0,1.5),29),
+    (127,168,(0,-9.2,2.95),(0,-7.5,2.2),(0,0,1.5),(0,0,1.5),29),
+    (169,210,(-1.6,-8.2,2.0),(1.6,-7.4,1.9),(0,0,1.5),(0,0,1.5),30),
+    (211,252,(2.6,-7.2,1.8),(0,-8.5,2.4),(0,0,1.5),(0,0,1.5),30),
+    (253,304,(-2.2,-8.2,1.8),(2.0,-8.4,2.0),(0,0,1.5),(0,0,1.5),30),
+    (305,360,(0,-9.7,3.3),(0,-6.9,2.5),(0,0,1.5),(0,0,1.5),28)
 ]
 bpy.ops.object.camera_add(location=CAMERA_SHOTS[0][2])
 camera = bpy.context.object
 scene.camera = camera
-all_shots = [f for f,_ in SHOT_EVENTS]
-for f in range(1, TOTAL_FRAMES + 1):
-    beat = next(shot for shot in CAMERA_SHOTS if shot[0] <= f <= shot[1])
-    first, last, a, b, look_a, look_b, lens = beat
-    t = (f - first) / max(1, last - first)
-    pos = Vector(a).lerp(Vector(b), t)
-    focus = Vector(look_a).lerp(Vector(look_b), t)
-    shake = Vector((0.025*math.sin(f*0.73), 0.0, 0.018*math.sin(f*1.13)))
-    for s in all_shots:
-        dt = f - s
-        if 0 <= dt <= 6:
-            amp = 0.16*math.exp(-dt/2.2)
-            shake += Vector((math.sin(dt*6.2+s)*amp, math.sin(dt*4.8)*amp*0.3, math.cos(dt*5.2)*amp))
-    camera.location = pos + shake
-    camera.rotation_euler = (focus - camera.location).to_track_quat('-Z','Y').to_euler()
-    camera.data.lens = lens + 2.0*math.sin(t*math.pi)
-    camera.keyframe_insert('location', frame=f)
-    camera.keyframe_insert('rotation_euler', frame=f)
-    camera.data.keyframe_insert(data_path='lens', frame=f)
+all_shots = [frame for frame,_ in SHOT_EVENTS]
+for frame in range(1,TOTAL_FRAMES+1):
+    beat = next(b for b in CAMERA_SHOTS if b[0] <= frame <= b[1])
+    first,last,a,b,_,_,lens = beat
+    t = (frame-first)/max(1,last-first)
+    pos = Vector(a).lerp(Vector(b),t)
+    left = path_position(ACTOR_PATHS[0],frame)
+    right = path_position(ACTOR_PATHS[1],frame)
+    focus = Vector(((left[0]+right[0])*0.5,
+                    (left[1]+right[1])*0.5,1.45))
+    shake = Vector((0.015*math.sin(frame*0.7),0,0.013*math.sin(frame*1.1)))
+    for shot in all_shots:
+        dt = frame-shot
+        if 0 <= dt <= 5:
+            amp = 0.085*math.exp(-dt/2.2)
+            shake += Vector((math.sin(dt*6.2+shot)*amp, 0,
+                             math.cos(dt*5.2)*amp))
+    camera.location = pos+shake
+    camera.rotation_euler = (focus-camera.location).to_track_quat('-Z','Y').to_euler()
+    camera.data.lens = lens+1.5*math.sin(t*math.pi)
+    camera.keyframe_insert('location',frame=frame)
+    camera.keyframe_insert('rotation_euler',frame=frame)
+    camera.data.keyframe_insert('lens',frame=frame)
 
-# Bloom works through compositing across Blender Eevee versions.
 try:
     scene.use_nodes = True
     tree = scene.node_tree
@@ -606,13 +645,13 @@ try:
     glare = tree.nodes.new('CompositorNodeGlare')
     glare.glare_type = 'FOG_GLOW'
     glare.quality = 'HIGH'
-    glare.threshold = 1.3
-    glare.mix = -0.82
+    glare.threshold = 1.8
+    glare.mix = -0.88
     composite = tree.nodes.new('CompositorNodeComposite')
-    tree.links.new(layers.outputs['Image'], glare.inputs['Image'])
-    tree.links.new(glare.outputs['Image'], composite.inputs['Image'])
-except (AttributeError, TypeError, ValueError) as exc:
-    print('Optional glow unavailable:', exc, flush=True)
+    tree.links.new(layers.outputs['Image'],glare.inputs['Image'])
+    tree.links.new(glare.outputs['Image'],composite.inputs['Image'])
+except (AttributeError,TypeError,ValueError) as exc:
+    print('Optional glow unavailable:',exc,flush=True)
 
 # ---------------- Save + render ----------------
 scene.frame_set(1)

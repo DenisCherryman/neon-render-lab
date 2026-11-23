@@ -6,14 +6,14 @@
 
 - Eight camera beats with fast lateral movement, over-the-shoulder angles, whip pans and close-up shots.
 - Two actors follow choreographed paths with advances, retreats and dodges; blend imported run animation when available.
-- Neon cyan/magenta accent lighting, animated light pulses, reflective wet-ground patches, brighter muzzle flashes and momentary point lights.
-- Twenty visual/audio shot events synced frame-by-frame. Synthetic mono 32 kHz 16-bit WAV lasts exactly 15 seconds.
+- Balanced cyan/magenta neon, moving light pulses, reflective wet-ground patches, aimed muzzle flashes and impact lights without the blown-out V5 preview.
+- Twenty reciprocal shot events synced frame-by-frame, with visible directed beams, impact bursts and hit reactions. Both actors face one another and their weapons actively track the opponent. Synthetic mono 32 kHz 16-bit WAV lasts exactly 15 seconds.
 - CC0 Poly Haven surfaces and original Soldier.glb import still used. Keep this PR in draft until visual inspection.
 
 ## Validation before a full render
 
 Pull requests run offline regression checks, audio generation and preview frames:
-`1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360`.
+`1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360`. These samples include exact shot frames and impact reactions.
 Manual Actions runs default to `preview`; select `full` explicitly for the full 360-frame render.
 Pushes to `main` retain full-render behavior.
 
@@ -23,7 +23,7 @@ Local commands, from the repository root:
 python3 -m unittest discover -s tests -v
 python3 make_audio.py
 python3 verify_outputs.py audio
-PREVIEW_FRAMES=1,17,32,36,37,80,81,124,125,165,166,205,206,250,251,300,301,360 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+PREVIEW_FRAMES=1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
 python3 verify_outputs.py preview
 ```
 
