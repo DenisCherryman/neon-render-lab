@@ -5,15 +5,15 @@ import wave
 
 random.seed(7)
 rate = 32000
-seconds = 10.0
-shots = [(32-1)/24,(46-1)/24,(60-1)/24,(72-1)/24,(95-1)/24,(106-1)/24,(122-1)/24,(138-1)/24,(160-1)/24,(176-1)/24,(196-1)/24,(214-1)/24]
+seconds = 15.0
+shots = [(17-1)/24,(32-1)/24,(48-1)/24,(65-1)/24,(80-1)/24,(99-1)/24,(115-1)/24,(133-1)/24,(147-1)/24,(166-1)/24,(179-1)/24,(193-1)/24,(212-1)/24,(227-1)/24,(244-1)/24,(259-1)/24,(277-1)/24,(302-1)/24,(321-1)/24,(341-1)/24]
 samples = []
 
 for i in range(round(rate * seconds)):
     t = i / rate
     # moody synth bed
     signal = (
-        0.065 * math.sin(2 * math.pi * 48 * t)
+        0.095 * math.sin(2 * math.pi * 48 * t)
         + 0.025 * math.sin(2 * math.pi * 96 * t)
         + 0.014 * math.sin(2 * math.pi * 190 * t)
     ) * (0.7 + 0.3*math.sin(2*math.pi*t/7.5))
@@ -28,13 +28,13 @@ for i in range(round(rate * seconds)):
             crack = random.uniform(-1, 1) * math.exp(-110 * a)
             body = math.sin(2 * math.pi * (100 - 58 * a) * a)
             tail = math.sin(2 * math.pi * 18 * a) * math.exp(-5*a)
-            signal += 0.48 * crack + 0.46 * math.exp(-22*a) * body + 0.16 * tail
+            signal += 0.56 * crack + 0.52 * math.exp(-22*a) * body + 0.20 * tail
         if 0 <= a < 0.09:
             signal += 0.08 * math.sin(2 * math.pi * 1400 * a) * math.exp(-40*a)
 
     # subtle whooshes during camera movement
     sweep = abs(math.sin(2*math.pi*(t/3.4)))
-    signal += 0.008 * sweep * random.uniform(-1, 1)
+    signal += 0.021 * sweep * random.uniform(-1, 1)
 
     samples.append(int(max(-1, min(1, signal)) * 32767))
 

@@ -1,1 +1,54 @@
 # neon-render-lab
+
+15-second cinematic Cyberpunk Blender scene: 1280×720, 24 fps, 360 frames.
+
+## Scene V5: cinematic action
+
+- Twelve faster camera beats with lateral tracking and closer two-character framing, leaving both fighters clearly in the line of fire.
+- Two actors move along tighter dodge/retreat paths with more rapid direction changes, react to delayed hits and face their opponent; blend imported run animation when available.
+- Lower brightness of CC0 concrete via dark-blue material tint, contrasting cyan/magenta lighting and reflective wet ground; short traveling projectiles replace static laser bars.
+- Twenty reciprocal shot events synced frame-by-frame, with visible directed beams, impact bursts and hit reactions. Both actors face one another and their weapons actively track the opponent. Synthetic mono 32 kHz 16-bit WAV lasts exactly 15 seconds.
+- CC0 Poly Haven surfaces and original Soldier.glb import still used. Keep this PR in draft until visual inspection.
+
+## Validation before a full render
+
+Pull requests run offline regression checks, audio generation and preview frames:
+`1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360`. These samples include exact shot frames and impact reactions.
+The preview also renders **48 consecutive frames (147–194)** as a **2-second 640×360 MP4 with synchronized audio**, covering multiple reciprocal attacks. This moving sample is required to judge choreography; static PNGs alone are insufficient.
+Manual Actions runs default to `preview`; select `full` explicitly for the full 360-frame render.
+Pushes to `main` retain full-render behavior.
+
+Local commands, from the repository root:
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 make_audio.py
+python3 verify_outputs.py audio
+PREVIEW_FRAMES=1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+python3 verify_outputs.py preview
+MOTION_PREVIEW_START=147 MOTION_PREVIEW_COUNT=48 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+ffmpeg -framerate 24 -start_number 147 -i motion/frame_%04d.png -ss 6.083333 -i action.wav -c:v libx264 -pix_fmt yuv420p -c:a aac -t 2 Cyberpunk_Fight_Motion_Preview_2s.mp4
+python3 verify_outputs.py motion
+```
+
+Inspect *all camera cuts*, imported run animation, skin/props, puddles,
+muzzle flashes, weapon grip, tracer direction, highlight detail and both actors.
+Watch for black frames or clipping caused by close camera moves.
+
+The full workflow checks all 360 PNG headers and dimensions, WAV sample count,
+MP4 dimensions/FPS/decoded frame count/duration, and decodes both MP4 streams.
+Expected full artifact: `Cyberpunk_Cloud_3D_Cinematic_15s` with MP4, WAV and V5 .blend.
+
+## Assets and reproducibility
+
+Poly Haven surface maps are required. Downloads validate imagery before publishing
+cache files and try 2K/1K JPG/PNG candidates. Cached Soldier.glb validates GLB header
+and size. `pack_all` runs before saving V5 .blend.
+
+Reopen the saved blend without original assets to confirm portability.
+Blender installed via Ubuntu 24.04 apt and the three.js/master model are not pinned
+to exact revisions. Fix those after visual acceptance. Timeout is **150 minutes**,
+not a guaranteed render time. Full render could take longer than prior V4's
+240-frame run; **do not run full until preview has been reviewed**.
+
+Legacy 3-second workflows remain archived; do not reactivate them.
