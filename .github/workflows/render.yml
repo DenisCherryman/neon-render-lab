@@ -53,6 +53,12 @@ jobs:
         run: |
           PREVIEW_FRAMES="$PREVIEW_LIST" xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
           python3 verify_outputs.py preview --preview-frames "$PREVIEW_LIST"
+      - name: Render 2-second motion preview of the duel
+        if: env.RENDER_MODE == 'preview'
+        run: |
+          MOTION_PREVIEW_START=147 MOTION_PREVIEW_COUNT=48 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+          ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 147 -i motion/frame_%04d.png -ss 6.083333 -i action.wav -c:v libx264 -preset fast -crf 24 -pix_fmt yuv420p -c:a aac -b:a 160k -t 2 Cyberpunk_Fight_Motion_Preview_2s.mp4
+          python3 verify_outputs.py motion
       - name: Render 360 frames with CC0 textures
         if: env.RENDER_MODE == 'full'
         run: |
@@ -73,6 +79,7 @@ jobs:
           name: Cyberpunk_preview
           path: |
             preview/*.png
+            Cyberpunk_Fight_Motion_Preview_2s.mp4
             action.wav
             CYBERPUNK_CLOUD_EXPERIMENT_V5_15s.blend
           if-no-files-found: error

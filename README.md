@@ -14,6 +14,7 @@
 
 Pull requests run offline regression checks, audio generation and preview frames:
 `1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360`. These samples include exact shot frames and impact reactions.
+The preview also renders **48 consecutive frames (147–194)** as a **2-second 640×360 MP4 with synchronized audio**, covering multiple reciprocal attacks. This moving sample is required to judge choreography; static PNGs alone are insufficient.
 Manual Actions runs default to `preview`; select `full` explicitly for the full 360-frame render.
 Pushes to `main` retain full-render behavior.
 
@@ -25,6 +26,9 @@ python3 make_audio.py
 python3 verify_outputs.py audio
 PREVIEW_FRAMES=1,17,18,32,33,48,65,81,115,147,193,212,227,244,259,302,341,360 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
 python3 verify_outputs.py preview
+MOTION_PREVIEW_START=147 MOTION_PREVIEW_COUNT=48 xvfb-run -a -s "-screen 0 1280x720x24" blender -b -t 3 --python-exit-code 1 -P render.py
+ffmpeg -framerate 24 -start_number 147 -i motion/frame_%04d.png -ss 6.083333 -i action.wav -c:v libx264 -pix_fmt yuv420p -c:a aac -t 2 Cyberpunk_Fight_Motion_Preview_2s.mp4
+python3 verify_outputs.py motion
 ```
 
 Inspect *all camera cuts*, imported run animation, skin/props, puddles,

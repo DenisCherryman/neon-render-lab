@@ -660,7 +660,19 @@ bpy.ops.file.pack_all()
 bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath('CYBERPUNK_CLOUD_EXPERIMENT_V5_15s.blend'))
 print('Starting render:', TOTAL_FRAMES, 'frames at', FPS, 'fps')
 preview_frames = os.environ.get('PREVIEW_FRAMES', '').strip()
-if preview_frames:
+motion_preview = os.environ.get('MOTION_PREVIEW_START', '').strip()
+if motion_preview:
+    first_frame = int(motion_preview)
+    count = int(os.environ.get('MOTION_PREVIEW_COUNT', '48'))
+    if count <= 0 or first_frame < 1 or first_frame + count - 1 > TOTAL_FRAMES:
+        raise ValueError('Invalid motion preview frame range')
+    scene.render.resolution_percentage = 50  # Fast 640x360 action sample
+    os.makedirs('motion', exist_ok=True)
+    for frame in range(first_frame, first_frame + count):
+        scene.frame_set(frame)
+        scene.render.filepath = os.path.abspath(f'motion/frame_{frame:04d}.png')
+        bpy.ops.render.render(write_still=True)
+elif preview_frames:
     selected = [int(value) for value in preview_frames.split(',')]
     if any(frame < 1 or frame > TOTAL_FRAMES for frame in selected):
         raise ValueError('Preview frame outside animation range')
