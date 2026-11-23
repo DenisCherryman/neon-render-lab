@@ -291,6 +291,28 @@ wet_mat = pbr_material('Wet_Asphalt_Reflections', None, None, None, metal=0.55,
                        fallback=(0.015, 0.035, 0.075, 1.0))
 wet_mat.node_tree.nodes.get('Principled BSDF').inputs['Roughness'].default_value = 0.12
 
+# Multiply the imported bright concrete albedo by a deep-blue pigment:
+# preserve real CC0 detail but bring back the dark Cyberpunk silhouette.
+def tint_texture(material, tint=(0.13, 0.23, 0.41, 1.0), factor=0.64):
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    bsdf = next(node for node in nodes if node.type == 'BSDF_PRINCIPLED')
+    base_input = bsdf.inputs['Base Color']
+    base_link = next((link for link in links if link.to_socket == base_input), None)
+    if base_link is None:
+        return
+    tint_node = nodes.new('ShaderNodeMixRGB')
+    tint_node.blend_type = 'MULTIPLY'
+    tint_node.inputs[0].default_value = factor
+    tint_node.inputs[2].default_value = tint
+    source = base_link.from_socket
+    links.remove(base_link)
+    links.new(source, tint_node.inputs[1])
+    links.new(tint_node.outputs[0], base_input)
+
+tint_texture(wall_mat)
+tint_texture(street_mat, (0.16, 0.25, 0.42, 1.0), 0.43)
+
 # ---------------- Environment ----------------
 # Alleyway
 cube('Ground', (0,0,-0.08), (18,36,0.18), street_mat)
@@ -423,12 +445,18 @@ for idx in range(2):
 
 # Choreographed paths: advances, retreats and lateral dodges.
 ACTOR_PATHS = [
-    [(1,(-2.3,-2.6)),(48,(-1.7,-1.4)),(90,(-2.6,-0.6)),
-     (142,(-1.5,-0.2)),(205,(-2.1,-1.2)),(272,(-1.4,0.5)),
-     (360,(-2.0,1.2))],
-    [(1,(2.3,1.6)),(58,(1.7,0.8)),(111,(2.6,-0.1)),
-     (165,(1.3,0.6)),(220,(2.2,0.1)),(288,(1.4,1.3)),
-     (360,(2.0,1.9))]
+    [(1,(-3.0,-3.1)),(40,(-2.1,-1.8)),(80,(-3.0,-0.8)),
+     (120,(-2.0,-1.3)),(145,(-1.8,-0.6)),(156,(-2.9,-0.8)),
+     (169,(-1.5,0.1)),(182,(-3.0,-0.6)),(195,(-1.8,0.8)),
+     (214,(-2.6,1.5)),(235,(-1.2,0.2)),(260,(-3.1,-0.8)),
+     (283,(-2.3,0.6)),(306,(-1.4,1.8)),(330,(-2.7,0.4)),
+     (360,(-1.7,2.2))],
+    [(1,(3.0,2.9)),(40,(2.5,1.2)),(80,(3.0,1.5)),
+     (120,(2.2,0.7)),(145,(2.6,0.5)),(156,(1.4,-0.2)),
+     (169,(2.8,0.4)),(182,(1.5,-0.8)),(195,(3.0,0.5)),
+     (214,(1.8,-0.6)),(235,(3.0,1.3)),(260,(2.1,0.0)),
+     (283,(2.9,2.1)),(306,(1.7,1.1)),(330,(3.1,1.4)),
+     (360,(2.1,2.5))]
 ]
 
 
@@ -451,15 +479,16 @@ for frame in range(1, TOTAL_FRAMES + 1):
         heading = math.atan2(-dx, dy)
         impact = 0.0
         for shot, attacker in SHOT_EVENTS:
-            if attacker != idx and 0 <= frame-shot <= 6:
-                impact += 0.14*math.exp(-(frame-shot)/2.4)
+            age = frame-shot-3  # projectile crosses the alley before impact
+            if attacker != idx and 0 <= age <= 8:
+                impact += 0.45*math.sin(math.pi*(age+1)/10)
         away = Vector((x-other_x, y-other_y, 0))
         if away.length > 0.01:
             away.normalize()
         root.location = (x + away.x*impact, y + away.y*impact,
-                         0.04 + 0.028*abs(math.sin(frame*0.26 + idx))-0.07*impact)
-        root.rotation_euler = (impact*0.9, 0.05*math.sin(frame*0.11+idx),
-                               heading + 0.035*math.sin(frame*0.13+idx))
+                         0.04 + 0.070*abs(math.sin(frame*0.29 + idx))-0.05*impact)
+        root.rotation_euler = (impact*1.1, (-1 if idx == 0 else 1)*impact*0.38,
+                               heading + 0.05*math.sin(frame*0.13+idx))
         root.keyframe_insert('location', frame=frame)
         root.keyframe_insert('rotation_euler', frame=frame)
 
@@ -547,14 +576,14 @@ for shot, actor in SHOT_EVENTS:
             casing.keyframe_insert('rotation_euler', frame=f)
         casing.keyframe_insert('scale', frame=f)
 
-# Directed energy exchange: every projectile visibly connects shooter and opponent.
-def glowing_segment(name, start, end, material, radius=0.035):
+# Reciprocal fire: a moving short tracer crosses the alley and strikes the other actor.
+def glowing_segment(name, start, end, material, radius=0.03):
     delta = end-start
     bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=radius,
                                         depth=delta.length, location=(start+end)*0.5)
     obj = bpy.context.object
     obj.name = name
-    obj.rotation_euler = delta.to_track_quat('Z', 'Y').to_euler()
+    obj.rotation_euler = delta.to_track_quat('Z','Y').to_euler()
     obj.data.materials.append(material)
     return obj
 
@@ -563,52 +592,65 @@ for shot, attacker in SHOT_EVENTS:
     scene.frame_set(shot)
     bpy.context.view_layer.update()
     defender = 1-attacker
-    tx,ty = path_position(ACTOR_PATHS[defender],shot)
-    target = Vector((tx,ty,1.43))
+    tx,ty = path_position(ACTOR_PATHS[defender],shot+3)
+    target = Vector((tx,ty,1.40))
     origin = weapons[attacker].matrix_world @ Vector((0,0.89,0))
-    material = warm_mat if attacker == 0 else cyan_mat
+    direction = target-origin
+    mat = warm_mat if attacker == 0 else cyan_mat
     beam = glowing_segment(f'Beam_to_actor_{defender}_at_{shot}',
-                           origin,target,material,0.045)
-    # Force a complete, readable line of fire for two frames.
-    for frame, vis in ((shot-1,0.001),(shot,1.0),(shot+2,1.0),(shot+4,0.001)):
-        beam.scale = (vis,vis,vis)
-        beam.keyframe_insert('scale',frame=frame)
+                           origin,target,mat,0.048)
+    beam.scale = (0.001,0.001,0.001)
+    beam.keyframe_insert('scale',frame=shot-1)
+    beam.keyframe_insert('location',frame=shot-1)
+    for dt in range(4):
+        head = min(1.0,(dt+1)/4)
+        tail = max(0.0,head-0.25)
+        beam.location = origin+direction*((head+tail)/2)
+        beam.scale = (1.0,1.0,head-tail)
+        beam.keyframe_insert('location',frame=shot+dt)
+        beam.keyframe_insert('scale',frame=shot+dt)
+    beam.scale = (0.001,0.001,0.001)
+    beam.keyframe_insert('scale',frame=shot+4)
+    beam.keyframe_insert('location',frame=shot+4)
 
-    # Shield-impact starburst at the exact location of the second character.
-    for n in range(6):
-        direction = Vector((math.cos(n*math.pi/3),
-                            math.sin(n*math.pi/3),
-                            0.35*math.sin(n*math.pi/2)))
+    # Delayed shield-impact burst at the victim, timed to the projectile arrival.
+    hit = shot+3
+    for n in range(7):
+        v = Vector((math.cos(n*math.pi*2/7),math.sin(n*math.pi*2/7),
+                    0.45*math.sin(n*math.pi*4/7)))
         spark = glowing_segment(f'Impact_actor_{defender}_{shot}_{n}',
-                               target-direction*0.37,
-                               target+direction*0.37,material,0.025)
-        for frame, vis in ((shot-1,0.001),(shot,0.5),
-                           (shot+2,1.25),(shot+5,0.001)):
+                               target-v*0.3,target+v*0.3,mat,0.026)
+        for frame,vis in ((hit-1,0.001),(hit,0.65),
+                          (hit+2,1.15),(hit+5,0.001)):
             spark.scale = (vis,vis,vis)
             spark.keyframe_insert('scale',frame=frame)
 
-    hit_light_data = bpy.data.lights.new(f'HitLight_{shot}','POINT')
-    hit_light_data.color = (1.0,0.42,0.08) if attacker==0 else (0.05,0.8,1.0)
-    hit_light_data.energy = 0.0
-    hit_light_data.shadow_soft_size = 0.35
-    hit_light = bpy.data.objects.new(f'HitLight_{shot}',hit_light_data)
+    light_data = bpy.data.lights.new(f'HitLight_{shot}','POINT')
+    light_data.color = (1.0,0.38,0.1) if attacker==0 else (0.08,0.75,1.0)
+    light_data.energy = 0.0
+    light_data.shadow_soft_size = 0.35
+    hit_light = bpy.data.objects.new(f'HitLight_{shot}',light_data)
     bpy.context.collection.objects.link(hit_light)
     hit_light.location = target
-    for frame,power in ((shot-1,0),(shot,500),(shot+2,230),(shot+5,0)):
-        hit_light_data.energy = power
-        hit_light_data.keyframe_insert('energy',frame=frame)
+    for frame,power in ((hit-1,0),(hit,380),(hit+2,210),(hit+5,0)):
+        light_data.energy = power
+        light_data.keyframe_insert('energy',frame=frame)
 
-# ---------------- Camera: the duel and reciprocal attacks stay in view ----------------
+# ---------------- Camera: quick alternating tracking angles keep both fighters visible ----------------
 # Eight connected shots: wide exchanges interleaved with opposing shoulders.
 CAMERA_SHOTS = [
-    (1,42, (0.0,-9.8,2.7),(-1.3,-8.7,2.25),(0,0,1.5),(0,0,1.5),28),
-    (43,84,(-3.1,-7.6,1.75),(-1.7,-7.0,1.7),(0,0,1.5),(0,0,1.5),30),
-    (85,126,(2.1,-8.3,2.15),(0,-7.2,2.0),(0,0,1.5),(0,0,1.5),29),
-    (127,168,(0,-9.2,2.95),(0,-7.5,2.2),(0,0,1.5),(0,0,1.5),29),
-    (169,210,(-1.6,-8.2,2.0),(1.6,-7.4,1.9),(0,0,1.5),(0,0,1.5),30),
-    (211,252,(2.6,-7.2,1.8),(0,-8.5,2.4),(0,0,1.5),(0,0,1.5),30),
-    (253,304,(-2.2,-8.2,1.8),(2.0,-8.4,2.0),(0,0,1.5),(0,0,1.5),30),
-    (305,360,(0,-9.7,3.3),(0,-6.9,2.5),(0,0,1.5),(0,0,1.5),28)
+    (1,30, (0,-8.7,2.6),(-1.1,-7.6,2.3),(0,0,1.5),(0,0,1.5),33),
+    (31,62,(-2.6,-6.4,1.7),(-1.3,-6.8,1.8),(0,0,1.5),(0,0,1.5),34),
+    (63,94,(2.3,-7.0,2.0),(0,-6.1,1.7),(0,0,1.5),(0,0,1.5),33),
+    (95,126,(0,-7.4,2.6),(1.5,-6.5,2.0),(0,0,1.5),(0,0,1.5),34),
+    (127,158,(-2.1,-6.1,1.9),(0,-5.7,1.8),(0,0,1.5),(0,0,1.5),33),
+    (159,190,(2.3,-6.8,1.8),(-1.0,-5.5,2.0),(0,0,1.5),(0,0,1.5),35),
+    (191,220,(0,-7.3,2.6),(2.2,-6.1,1.9),(0,0,1.5),(0,0,1.5),33),
+    (221,250,(-2.1,-6.4,1.7),(1.2,-5.9,2.1),(0,0,1.5),(0,0,1.5),34),
+    (251,281,(2.3,-6.5,1.7),(-1.0,-6.1,2.0),(0,0,1.5),(0,0,1.5),33),
+    (282,310,(0,-7.6,2.9),(-2.2,-6.0,1.7),(0,0,1.5),(0,0,1.5),32),
+    (311,335,(-2.6,-6.5,1.8),(1.8,-6.1,1.9),(0,0,1.5),(0,0,1.5),33),
+    (336,360,(0,-8.2,2.5),(0,-5.8,1.9),(0,0,1.5),(0,0,1.5),32)
 ]
 bpy.ops.object.camera_add(location=CAMERA_SHOTS[0][2])
 camera = bpy.context.object

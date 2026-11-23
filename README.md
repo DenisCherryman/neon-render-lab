@@ -4,9 +4,9 @@
 
 ## Scene V5: cinematic action
 
-- Eight camera beats with fast lateral movement, over-the-shoulder angles, whip pans and close-up shots.
-- Two actors follow choreographed paths with advances, retreats and dodges; blend imported run animation when available.
-- Balanced cyan/magenta neon, moving light pulses, reflective wet-ground patches, aimed muzzle flashes and impact lights without the blown-out V5 preview.
+- Twelve faster camera beats with lateral tracking and closer two-character framing, leaving both fighters clearly in the line of fire.
+- Two actors move along tighter dodge/retreat paths with more rapid direction changes, react to delayed hits and face their opponent; blend imported run animation when available.
+- Lower brightness of CC0 concrete via dark-blue material tint, contrasting cyan/magenta lighting and reflective wet ground; short traveling projectiles replace static laser bars.
 - Twenty reciprocal shot events synced frame-by-frame, with visible directed beams, impact bursts and hit reactions. Both actors face one another and their weapons actively track the opponent. Synthetic mono 32 kHz 16-bit WAV lasts exactly 15 seconds.
 - CC0 Poly Haven surfaces and original Soldier.glb import still used. Keep this PR in draft until visual inspection.
 

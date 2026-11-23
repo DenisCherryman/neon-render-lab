@@ -109,6 +109,8 @@ class CinematicTimeline(unittest.TestCase):
         self.assertTrue(all(a < b for (a,_),(b,_) in zip(events,events[1:])))
         src = (ROOT/'render.py').read_text()
         self.assertIn('Beam_to_actor_',src)
+        self.assertIn('head = min(1.0,(dt+1)/4)',src)
+        self.assertIn('hit = shot+3',src)
         self.assertIn('Impact_actor_',src)
         self.assertIn('other_x, other_y = path_position',src)
 
@@ -125,6 +127,7 @@ class CinematicTimeline(unittest.TestCase):
         render = module_assignments('render.py')
         paths = ast.literal_eval(render['ACTOR_PATHS'])
         self.assertEqual(len(paths), 2)
+        self.assertTrue(all(len(path) >= 12 for path in paths))
         for path in paths:
             self.assertEqual(path[0][0], 1)
             self.assertEqual(path[-1][0], 360)
